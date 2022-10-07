@@ -12,6 +12,9 @@
 // graphics backend specifics
 #ifdef PL_VULKAN_BACKEND
 #include "vulkan_pl_graphics.c"
+#define VULKAN_PL_DRAWING_IMPLEMENTATION
+#include "vulkan_pl_drawing.h"
+#undef VULKAN_PL_DRAWING_IMPLEMENTATION
 #endif
 
 #ifdef PL_METAL_BACKEND

@@ -91,6 +91,7 @@ NS_ASSUME_NONNULL_BEGIN
 // [SECTION] implementation
 //-----------------------------------------------------------------------------
 
+extern void                  pl__new_draw_frame   (plDrawContext* ctx); // in pl_drawing.c
 static inline CFTimeInterval GetMachAbsoluteTimeInSeconds() { return (CFTimeInterval)(double)clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1e9; }
 
 void
@@ -141,7 +142,7 @@ pl_new_draw_frame_metal(plDrawContext* ctx, MTLRenderPassDescriptor* renderPassD
 {
     MetalContext* metalCtx = ctx->_platformData;
     metalCtx.framebufferDescriptor = [[FramebufferDescriptor alloc] initWithRenderPassDescriptor:renderPassDescriptor];
-    pl_new_draw_frame(ctx);
+    pl__new_draw_frame(ctx);
 }
 
 void

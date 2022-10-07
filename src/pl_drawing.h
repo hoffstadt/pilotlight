@@ -22,17 +22,22 @@ Index of this file:
 #define PL_MAX_NAME_LENGTH 1024
 #endif
 
+#ifndef PL_MAX_FRAMES_IN_FLIGHT
+#define PL_MAX_FRAMES_IN_FLIGHT 2
+#endif
+
 #ifndef PL_ASSERT
 #include <assert.h>
 #define PL_ASSERT(x) assert(x)
 #endif
 
-#ifndef PL_FREE
-#define PL_FREE(x) free(x)
+#ifndef PL_ALLOC
+#include <stdlib.h>
+#define PL_ALLOC(x) malloc(x)
 #endif
 
-#ifndef PL_ALLOC
-#define PL_ALLOC(x) malloc(x)
+#ifndef PL_FREE
+#define PL_FREE(x) free(x)
 #endif
 
 #ifdef PL_USE_STB_SPRINTF
@@ -84,10 +89,10 @@ typedef void* plTextureId;
 void         pl_create_drawlist     (plDrawContext* ctx, plDrawList* drawlistOut);
 plDrawLayer* pl_request_draw_layer  (plDrawList* drawlist, const char* name);
 void         pl_return_draw_layer   (plDrawLayer* layer);
-void         pl_cleanup_draw_context(plDrawContext* ctx);
+void         pl_cleanup_draw_context(plDrawContext* ctx);  // implementated by backend
 
 // per frame
-void pl_new_draw_frame   (plDrawContext* ctx);
+void pl_new_draw_frame   (plDrawContext* ctx); // implementated by backend
 void pl_submit_draw_layer(plDrawLayer* layer);
 
 // drawing

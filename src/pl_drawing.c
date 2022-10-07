@@ -79,13 +79,7 @@ pl_return_draw_layer(plDrawLayer* layer)
 }
 
 void
-pl_cleanup_draw_context(plDrawContext* ctx)
-{
-
-}
-
-void
-pl_new_draw_frame(plDrawContext* ctx)
+pl__new_draw_frame(plDrawContext* ctx)
 {
     // reset drawlists
     for(uint32_t i = 0u; i < pl_sb_size(ctx->sbDrawlists); i++)
