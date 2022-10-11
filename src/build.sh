@@ -52,7 +52,7 @@ fi
 PL_CONFIG=Debug
 
 # common include directories
-PL_INCLUDE_DIRECTORIES="-Idependencies/stb"
+PL_INCLUDE_DIRECTORIES="-I../dependencies/stb"
 
 # common link directories
 PL_LINK_DIRECTORIES="-L../out"

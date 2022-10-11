@@ -34,6 +34,7 @@ typedef struct
     plDrawList*                 drawlist;
     plDrawLayer*                fgDrawLayer;
     plDrawLayer*                bgDrawLayer;
+    plFontAtlas                 fontAtlas;
 } plAppData;
 
 //-----------------------------------------------------------------------------
@@ -73,6 +74,10 @@ pl_app_setup()
     pl_create_drawlist(&gAppData.ctx, gAppData.drawlist);
     gAppData.bgDrawLayer = pl_request_draw_layer(gAppData.drawlist, "Background Layer");
     gAppData.fgDrawLayer = pl_request_draw_layer(gAppData.drawlist, "Foreground Layer");
+
+    // create font atlas
+    pl_add_default_font(&gAppData.fontAtlas);
+    pl_build_font_atlas(&gAppData.ctx, &gAppData.fontAtlas);
 }
 
 //-----------------------------------------------------------------------------
@@ -132,6 +137,7 @@ pl_app_render()
     // draw commands
     pl_add_triangle_filled(gAppData.bgDrawLayer, (plVec2){10.0f, 10.0f}, (plVec2){10.0f, 200.0f}, (plVec2){200.0f, 200.0f}, (plVec4){1.0f, 0.0f, 0.0f, 1.0f});
     pl_add_triangle_filled(gAppData.bgDrawLayer, (plVec2){10.0f, 10.0f}, (plVec2){200.0f, 200.0f}, (plVec2){200.0f, 10.0f}, (plVec4){0.0f, 1.0f, 0.0f, 1.0f});
+    pl_add_text(gAppData.bgDrawLayer, &gAppData.fontAtlas.sbFonts[0], 13.0f, (plVec2){10.0f, 400.0f}, (plVec4){0.0f, 0.0f, 0.0f, 1.0f}, "Pilot Light", 0.0f);
 
     // submit draw layers
     pl_submit_draw_layer(gAppData.bgDrawLayer);

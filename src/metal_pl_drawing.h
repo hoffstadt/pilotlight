@@ -91,7 +91,8 @@ NS_ASSUME_NONNULL_BEGIN
 // [SECTION] implementation
 //-----------------------------------------------------------------------------
 
-extern void                  pl__new_draw_frame   (plDrawContext* ctx); // in pl_drawing.c
+extern void                  pl__new_draw_frame(plDrawContext* ctx); // in pl_drawing.c
+extern void                  pl__build_font_atlas(plFontAtlas* ctx); // in pl_drawing.c
 static inline CFTimeInterval GetMachAbsoluteTimeInSeconds() { return (CFTimeInterval)(double)clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1e9; }
 
 void
@@ -101,40 +102,40 @@ pl_setup_draw_context_metal(plDrawContext* ctx, id<MTLDevice> device)
     MetalContext* metalCtx = ctx->_platformData;
     metalCtx.device = device;
 
-    // create font atlas texture
-    MTLTextureDescriptor *textureDescriptor = [[MTLTextureDescriptor alloc] init];
+    // // create font atlas texture
+    // MTLTextureDescriptor *textureDescriptor = [[MTLTextureDescriptor alloc] init];
 
-    // Indicate that each pixel has a blue, green, red, and alpha channel, where each channel is
-    // an 8-bit unsigned normalized value (i.e. 0 maps to 0.0 and 255 maps to 1.0)
-    textureDescriptor.pixelFormat = MTLPixelFormatRGBA8Unorm;
+    // // Indicate that each pixel has a blue, green, red, and alpha channel, where each channel is
+    // // an 8-bit unsigned normalized value (i.e. 0 maps to 0.0 and 255 maps to 1.0)
+    // textureDescriptor.pixelFormat = MTLPixelFormatRGBA8Unorm;
 
-    // Set the pixel dimensions of the texture
-    textureDescriptor.width = 2;
-    textureDescriptor.height = 2;
+    // // Set the pixel dimensions of the texture
+    // textureDescriptor.width = 2;
+    // textureDescriptor.height = 2;
 
-    // Create the texture from the device by using the descriptor
-    metalCtx.fontTexture = [device newTextureWithDescriptor:textureDescriptor];  
+    // // Create the texture from the device by using the descriptor
+    // metalCtx.fontTexture = [device newTextureWithDescriptor:textureDescriptor];  
 
-    MTLRegion region = {
-        { 0, 0, 0 }, // MTLOrigin
-        {2, 2, 1}    // MTLSize
-    };
+    // MTLRegion region = {
+    //     { 0, 0, 0 }, // MTLOrigin
+    //     {2, 2, 1}    // MTLSize
+    // };
 
-    NSUInteger bytesPerRow = 4 * 2;
+    // NSUInteger bytesPerRow = 4 * 2;
 
-    unsigned char image[] = {
-        255,   255,  255, 255,
-        0, 255,   0, 255,
-        0,   0, 255, 255,
-        255,   0, 255, 255
-    };
+    // unsigned char image[] = {
+    //     255,   255,  255, 255,
+    //     0, 255,   0, 255,
+    //     0,   0, 255, 255,
+    //     255,   0, 255, 255
+    // };
 
-    [metalCtx.fontTexture replaceRegion:region
-                mipmapLevel:0
-                withBytes:image
-                bytesPerRow:bytesPerRow];
+    // [metalCtx.fontTexture replaceRegion:region
+    //             mipmapLevel:0
+    //             withBytes:image
+    //             bytesPerRow:bytesPerRow];
 
-    ctx->fontAtlas = metalCtx.fontTexture;
+    // ctx->fontAtlas = metalCtx.fontTexture;
 }
 
 void
@@ -247,8 +248,44 @@ pl_submit_drawlist_metal(plDrawList* drawlist, float width, float height, id<MTL
 
         // draw
         [renderEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:cmd.elementCount indexType:MTLIndexTypeUInt32 indexBuffer:indexBuffer.buffer indexBufferOffset:cmd.indexOffset];
-
     }
+}
+
+void
+pl_build_font_atlas(plDrawContext* ctx, plFontAtlas* atlas)
+{
+    pl__build_font_atlas(atlas);
+    ctx->fontAtlas = atlas;
+
+    MetalContext* metalCtx = ctx->_platformData;
+
+    // create font atlas texture
+    MTLTextureDescriptor *textureDescriptor = [[MTLTextureDescriptor alloc] init];
+
+    // Indicate that each pixel has a blue, green, red, and alpha channel, where each channel is
+    // an 8-bit unsigned normalized value (i.e. 0 maps to 0.0 and 255 maps to 1.0)
+    textureDescriptor.pixelFormat = MTLPixelFormatRGBA8Unorm;
+
+    // Set the pixel dimensions of the texture
+    textureDescriptor.width = atlas->atlasSize[0];
+    textureDescriptor.height = atlas->atlasSize[1];
+
+    // Create the texture from the device by using the descriptor
+    metalCtx.fontTexture = [metalCtx.device newTextureWithDescriptor:textureDescriptor];  
+
+    MTLRegion region = {
+        { 0, 0, 0 }, // MTLOrigin
+        {atlas->atlasSize[0], atlas->atlasSize[1], 1}    // MTLSize
+    };
+
+    NSUInteger bytesPerRow = 4 * atlas->atlasSize[0];
+
+    [metalCtx.fontTexture replaceRegion:region
+                mipmapLevel:0
+                withBytes:atlas->pixelsAsRGBA32
+                bytesPerRow:bytesPerRow];
+
+    ctx->fontAtlas->texture = metalCtx.fontTexture;
 }
 
 //-----------------------------------------------------------------------------

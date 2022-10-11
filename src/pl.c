@@ -22,4 +22,12 @@
 #include "metal_pl_drawing.h"
 #undef METAL_PL_DRAWING_IMPLEMENTATION
 
+#define STB_RECT_PACK_IMPLEMENTATION
+#include "stb_rect_pack.h"
+#undef STB_RECT_PACK_IMPLEMENTATION
+
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "stb_truetype.h"
+#undef STB_TRUETYPE_IMPLEMENTATION
+
 #endif

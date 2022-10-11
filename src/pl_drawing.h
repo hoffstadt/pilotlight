@@ -69,12 +69,23 @@ Index of this file:
 // [SECTION] forward declarations
 //-----------------------------------------------------------------------------
 
+// drawing
 PL_DECLARE_STRUCT(plDrawContext);
 PL_DECLARE_STRUCT(plDrawList);
 PL_DECLARE_STRUCT(plDrawLayer);
 PL_DECLARE_STRUCT(plDrawCommand);
 PL_DECLARE_STRUCT(plDrawVertex);
 
+// fonts
+PL_DECLARE_STRUCT(plFontGlyph);
+PL_DECLARE_STRUCT(plFontRange);
+PL_DECLARE_STRUCT(plFont);
+PL_DECLARE_STRUCT(plFontConfig);
+PL_DECLARE_STRUCT(plFontCustomRect);
+PL_DECLARE_STRUCT(plFontAtlas);
+PL_DECLARE_STRUCT(plFontPrepData);
+
+// math
 typedef union plVec2_t plVec2;
 typedef union plVec3_t plVec3;
 typedef union plVec4_t plVec4;
@@ -96,7 +107,13 @@ void pl_new_draw_frame   (plDrawContext* ctx); // implementated by backend
 void pl_submit_draw_layer(plDrawLayer* layer);
 
 // drawing
+void pl_add_text(plDrawLayer* layer, plFont* font, float size, plVec2 p, plVec4 color, const char* text, float wrap);
 void pl_add_triangle_filled(plDrawLayer* layer, plVec2 p0, plVec2 p1, plVec2 p2, plVec4 color);
+
+// fonts
+void pl_build_font_atlas(plDrawContext* ctx, plFontAtlas* atlas); // implemented by backend
+void pl_add_default_font(plFontAtlas* atlas);
+void pl_add_font_from_memory_ttf(plFontAtlas* atlas, plFontConfig config, void* data);
 
 //-----------------------------------------------------------------------------
 // [SECTION] structs
@@ -127,13 +144,14 @@ typedef struct plDrawCommand_t
     uint32_t    elementCount;
     uint32_t    layer;
     plTextureId textureId;
+    bool        sdf;
 } plDrawCommand;
 
 typedef struct plDrawContext_t
 {
     plDrawList** sbDrawlists;
     uint64_t     frameCount;
-    plTextureId  fontAtlas;
+    plFontAtlas* fontAtlas;
     void*        _platformData;
 } plDrawContext;
 
@@ -167,5 +185,97 @@ typedef struct plDrawLayer_t
     uint32_t        vertexCount;
     plDrawCommand*  _lastCommand;
 } plDrawLayer;
+
+typedef struct plFontChar_t
+{
+    uint16_t x0;
+    uint16_t y0;
+    uint16_t x1;
+    uint16_t y1;
+    float    xOff;
+    float    yOff;
+    float    xAdv;
+    float    xOff2;
+    float    yOff2;
+} plFontChar;
+
+typedef struct plFontGlyph_t
+{
+    float x0;
+    float y0;
+    float u0;
+    float v0;
+    float x1;
+    float y1;
+    float u1;
+    float v1;
+    float xAdvance;
+    float leftBearing;  
+} plFontGlyph;
+
+typedef struct plFontCustomRect_t
+{
+    uint32_t       width;
+    uint32_t       height;
+    uint32_t       x;
+    uint32_t       y;
+    unsigned char* bytes;
+} plFontCustomRect;
+
+typedef struct plFontRange_t
+{
+    int         firstCodePoint;
+    uint32_t    charCount;
+    plFontChar* ptrFontChar; // offset into parent font's char data
+} plFontRange;
+
+typedef struct plFontConfig_t
+{
+    float        fontSize;
+    plFontRange* sbRanges;
+    int*         sbIndividualChars;
+
+    // BITMAP
+    uint32_t vOverSampling;
+    uint32_t hOverSampling;
+
+    // SDF
+    bool          sdf;
+    int           sdfPadding;
+    unsigned char onEdgeValue;
+    float         sdfPixelDistScale;
+} plFontConfig;
+
+typedef struct plFontAtlas_t
+{
+    plDrawContext*    ctx;
+    plFont*           sbFonts;
+    plFontCustomRect* sbCustomRects;
+    unsigned char*    pixelsAsAlpha8;
+    unsigned char*    pixelsAsRGBA32;
+    uint32_t          atlasSize[2];
+    float             whiteUv[2];
+    bool              dirty;
+    // plFontFile*       sbFontFileCache_;
+    int               glyphPadding;
+    size_t            pixelDataSize;
+    plFontPrepData*   _sbPrepData;
+    plFontCustomRect* whiteRect;
+    plTextureId       texture;
+    void*             _platformData;
+} plFontAtlas;
+
+typedef struct plFont_t
+{
+    plFontConfig config;
+    plFontAtlas* parentAtlas;
+    float        lineSpacing;
+    float        ascent;
+    float        descent;
+    
+    uint32_t*    sbCodePoints; // glyph index lookup based on codepoint
+    plFontGlyph* sbGlyphs;     // glyphs
+    plFontChar*  sbCharData;
+} plFont;
 
 #endif // PL_DRAWING_H
