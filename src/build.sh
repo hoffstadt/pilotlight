@@ -209,8 +209,8 @@ fi
 ###############################################################################
 #                                vulkan shaders                               #
 ###############################################################################
-glslc -o ../out/simple.frag.spv ./shaders/simple.frag
-glslc -o ../out/simple.vert.spv ./shaders/simple.vert
+# glslc -o ../out/simple.frag.spv ./shaders/simple.frag
+# glslc -o ../out/simple.vert.spv ./shaders/simple.vert
 
 fi
 

@@ -551,8 +551,8 @@ pl_calculate_text_size(plFont* font, float size, const char* text, float wrap)
 
         if(c == '\n')
         {
-            result.x = originalPosition.x;
-            result.y += lineSpacing;
+            cursor.x = originalPosition.x;
+            cursor.y += lineSpacing;
         }
         else if(c == '\r')
         {

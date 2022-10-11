@@ -98,22 +98,6 @@ pl_app_setup()
 
     // create font atlas
     pl_add_default_font(&gAppData.fontAtlas);
-
-    plFontConfig fontConfig = {
-        .sdf = true,
-        .fontSize = 42.0f,
-        .hOverSampling = 1,
-        .vOverSampling = 1,
-        .onEdgeValue = 255,
-        .sdfPadding = 1
-    };
-    
-    plFontRange range = {
-        .firstCodePoint = 0x0020,
-        .charCount = 0x00FF - 0x0020
-    };
-    pl_sb_push(fontConfig.sbRanges, range);
-    pl_add_font_from_file_ttf(&gAppData.fontAtlas, fontConfig, "Cousine-Regular.ttf");
     pl_build_font_atlas(gAppData.ctx, &gAppData.fontAtlas);
 }
 
@@ -236,16 +220,10 @@ pl_app_render()
     vkCmdSetScissor(currentFrame->cmdBuf, 0, 1, &dynamicScissor);  
 
     // draw commands
-    pl_add_text(gAppData.fgDrawLayer, &gAppData.fontAtlas.sbFonts[0], 13.0f, (plVec2){10.0f, 100.0f}, (plVec4){0.1f, 0.5f, 0.0f, 1.0f}, "Bitmap Font", 0.0f);
-    pl_add_text(gAppData.fgDrawLayer, &gAppData.fontAtlas.sbFonts[1], 42.0f, (plVec2){10.0f, 10.0f}, (plVec4){0.1f, 0.5f, 0.0f, 1.0f}, "SDF Font", 0.0f);
-    
-    pl_add_triangle_filled(gAppData.bgDrawLayer, (plVec2){500.0f, 10.0f}, (plVec2){500.0f, 200.0f}, (plVec2){700.0f, 200.0f}, (plVec4){1.0f, 0.0f, 0.0f, 1.0f});
-    pl_add_triangle_filled(gAppData.bgDrawLayer, (plVec2){500.0f, 10.0f}, (plVec2){700.0f, 200.0f}, (plVec2){700.0f, 10.0f}, (plVec4){0.0f, 1.0f, 0.0f, 1.0f});
-
-    plVec2 textSize0 = pl_calculate_text_size(&gAppData.fontAtlas.sbFonts[0], 13.0f, "Bitmap Font", 0.0f);
-    plVec2 textSize1 = pl_calculate_text_size(&gAppData.fontAtlas.sbFonts[1], 42.0f, "SDF Font", 0.0f);
-    pl_add_rect_filled(gAppData.bgDrawLayer, (plVec2){10.0f, 100.0f}, (plVec2){10.0f + textSize0.x, 100.0f + textSize0.y}, (plVec4){0.0f, 0.0f, 0.2f, 0.5f});
-    pl_add_rect_filled(gAppData.bgDrawLayer, (plVec2){10.0f, 10.0f}, (plVec2){10.0f + textSize1.x, 10.0f + textSize1.y}, (plVec4){0.0f, 0.0f, 0.2f, 0.5f});
+    pl_add_text(gAppData.fgDrawLayer, &gAppData.fontAtlas.sbFonts[0], 13.0f, (plVec2){10.0f, 10.0f}, (plVec4){0.1f, 0.5f, 0.0f, 1.0f}, "Pilot Light\nGraphics", 0.0f);
+    pl_add_triangle_filled(gAppData.bgDrawLayer, (plVec2){10.0f, 50.0f}, (plVec2){10.0f, 150.0f}, (plVec2){150.0f, 50.0f}, (plVec4){1.0f, 0.0f, 0.0f, 1.0f});
+    plVec2 textSize = pl_calculate_text_size(&gAppData.fontAtlas.sbFonts[0], 13.0f, "Pilot Light\nGraphics", 0.0f);
+    pl_add_rect_filled(gAppData.bgDrawLayer, (plVec2){10.0f, 10.0f}, (plVec2){10.0f + textSize.x, 10.0f + textSize.y}, (plVec4){0.0f, 0.0f, 0.8f, 0.5f});
     
     // submit draw layers
     pl_submit_draw_layer(gAppData.bgDrawLayer);
