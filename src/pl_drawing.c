@@ -350,9 +350,8 @@ pl_add_rect_filled(plDrawLayer* layer, plVec2 minP, plVec2 maxP, plVec4 color)
 void
 pl_add_font_from_file_ttf(plFontAtlas* atlas, plFontConfig config, const char* file)
 {
-    void* data = pl__read_file(file);
+    void* data = pl__read_file(file); // freed after atlas is created
     pl_add_font_from_memory_ttf(atlas, config, data);
-    PL_FREE(data);
 }
 
 void
@@ -823,6 +822,8 @@ pl__build_font_atlas(plFontAtlas* atlas)
                 charIndex++;
             }
         }
+
+        PL_FREE(atlas->_sbPrepData[fontIndex].fontInfo.data);
     }
 
     // convert to 4 color channels

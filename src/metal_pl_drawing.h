@@ -113,7 +113,6 @@ pl_create_draw_context_metal(id<MTLDevice> device)
 void
 pl_cleanup_draw_context(plDrawContext* ctx)
 {
-
     MetalContext* metalCtx = ctx->_platformData;
     [metalCtx dealloc];
     pl__cleanup_draw_context(ctx);
@@ -148,9 +147,7 @@ pl_submit_drawlist_metal(plDrawList* drawlist, float width, float height, id<MTL
     memcpy(vertexBuffer.buffer.contents, drawlist->sbVertexBuffer, sizeof(plDrawVertex) * pl_sb_size(drawlist->sbVertexBuffer));
 
     // index GPU data transfer
-    uint32_t uTempIndexBufferOffset = 0u;
-
-    
+    uint32_t uTempIndexBufferOffset = 0u;  
     uint32_t globalIdxBufferIndexOffset = 0u;
 
     for(uint32_t i = 0u; i < pl_sb_size(drawlist->sbSubmittedLayers); i++)

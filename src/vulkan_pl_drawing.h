@@ -35,10 +35,10 @@ Index of this file:
 //-----------------------------------------------------------------------------
 
 // backend implementation
-void pl_setup_draw_context_vulkan  (plDrawContext* ctx, VkPhysicalDevice physicalDevice, uint32_t imageCount, VkDevice logicalDevice);
-void pl_setup_drawlist_vulkan      (plDrawList* drawlist, VkRenderPass renderPass);
-void pl_submit_drawlist_vulkan     (plDrawList* drawlist, float width, float height, VkCommandBuffer cmdBuf, uint32_t currentFrameIndex);
-void pl_new_draw_frame             (plDrawContext* ctx);
+plDrawContext* pl_create_draw_context_vulkan(VkPhysicalDevice physicalDevice, uint32_t imageCount, VkDevice logicalDevice);
+void           pl_setup_drawlist_vulkan     (plDrawList* drawlist, VkRenderPass renderPass);
+void           pl_submit_drawlist_vulkan    (plDrawList* drawlist, float width, float height, VkCommandBuffer cmdBuf, uint32_t currentFrameIndex);
+void           pl_new_draw_frame            (plDrawContext* ctx);
 
 // misc
 VkDescriptorSet pl_add_texture(plDrawContext* drawContext, VkImageView imageView, VkImageLayout imageLayout);
@@ -322,10 +322,11 @@ static void     pl__grow_vulkan_index_buffer(plDrawList* ptrDrawlist, uint32_t u
 // [SECTION] implementation
 //-----------------------------------------------------------------------------
 
-void
-pl_setup_draw_context_vulkan(plDrawContext* ctx, VkPhysicalDevice physicalDevice, uint32_t imageCount, VkDevice logicalDevice)
+plDrawContext*
+pl_create_draw_context_vulkan(VkPhysicalDevice physicalDevice, uint32_t imageCount, VkDevice logicalDevice)
 {
-
+    plDrawContext* ctx = PL_ALLOC(sizeof(plDrawContext));
+    memset(ctx, 0, sizeof(plDrawContext));
     plVulkanDrawContext* vulkanDrawContext = (plVulkanDrawContext*)PL_ALLOC(sizeof(plVulkanDrawContext));
     memset(vulkanDrawContext, 0, sizeof(plVulkanDrawContext));
     vulkanDrawContext->device = logicalDevice;
@@ -478,6 +479,8 @@ pl_setup_draw_context_vulkan(plDrawContext* ctx, VkPhysicalDevice physicalDevice
         .pCode = __glsl_shader_fragsdf_spv
     };
     PL_ASSERT(vkCreateShaderModule(vulkanDrawContext->device, &sdfShdrInfo, NULL, &vulkanDrawContext->sdfShdrStgInfo.module) == VK_SUCCESS);
+
+    return ctx;
 }
 
 void
@@ -726,12 +729,11 @@ pl_submit_drawlist_vulkan(plDrawList* drawlist, float width, float height, VkCom
     
     // index GPU data transfer
     uint32_t uTempIndexBufferOffset = 0u;
-
-    plDrawCommand* lastCommand = NULL;
     uint32_t globalIdxBufferIndexOffset = 0u;
 
     for(uint32_t i = 0u; i < pl_sb_size(drawlist->sbSubmittedLayers); i++)
     {
+        plDrawCommand* lastCommand = NULL;
         plDrawLayer* layer = drawlist->sbSubmittedLayers[i];
 
         unsigned char* destination = drawlistVulkanData->sbIndexBufferMap[currentFrameIndex];
@@ -935,6 +937,7 @@ pl_build_font_atlas(plDrawContext* ctx, plFontAtlas* atlas)
     plVulkanDrawContext* vulkanDrawCtx = (plVulkanDrawContext*)ctx->_platformData;
 
     pl__build_font_atlas(atlas);
+    atlas->ctx = ctx;
     ctx->fontAtlas = atlas;
 
     VkImageCreateInfo imageInfo = 
