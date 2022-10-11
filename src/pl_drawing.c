@@ -428,7 +428,7 @@ pl__build_font_atlas(plFontAtlas* atlas)
     totalAtlasArea += 64;
 
     // calculate final texture area required
-    const float totalAtlasAreaSqrt = sqrt((float)totalAtlasArea) + 1.0f;
+    const float totalAtlasAreaSqrt = (float)sqrt((float)totalAtlasArea) + 1.0f;
     atlas->atlasSize[0] = 512;
     atlas->atlasSize[1] = 0;
     if     (totalAtlasAreaSqrt >= 4096 * 0.7f) atlas->atlasSize[0] = 4096;
@@ -462,7 +462,7 @@ pl__build_font_atlas(plFontAtlas* atlas)
             for(uint32_t j = 0u; j < prep->uTotalCharCount; j++)
             {
                 if(prep->rects[j].was_packed)
-                    atlas->atlasSize[1] = pl__get_max(atlas->atlasSize[1], prep->rects[j].y + prep->rects[j].h);
+                    atlas->atlasSize[1] = (uint32_t)pl__get_max((float)atlas->atlasSize[1], (float)(prep->rects[j].y + prep->rects[j].h));
             }
         }
     }
@@ -474,7 +474,7 @@ pl__build_font_atlas(plFontAtlas* atlas)
     for(uint32_t i = 0u; i < pl_sb_size(atlas->sbCustomRects); i++)
     {
         if(rects[i].was_packed)
-            atlas->atlasSize[1] = pl__get_max(atlas->atlasSize[1], rects[i].y + rects[i].h);
+            atlas->atlasSize[1] = (uint32_t)pl__get_max((float)atlas->atlasSize[1], (float)(rects[i].y + rects[i].h));
     }
 
     // grow cpu side buffers if needed
@@ -509,9 +509,9 @@ pl__build_font_atlas(plFontAtlas* atlas)
     }
 
     uint32_t charDataOffset = 0u;
-    for(uint32_t i = 0u; i < pl_sb_size(atlas->sbFonts); i++)
+    for(uint32_t fontIndex = 0u; fontIndex < pl_sb_size(atlas->sbFonts); fontIndex++)
     {
-        plFont* font = &atlas->sbFonts[i];
+        plFont* font = &atlas->sbFonts[fontIndex];
         if(font->config.sdf)
         {
             for(uint32_t i = 0u; i < pl_sb_size(font->sbCharData); i++)
@@ -685,7 +685,7 @@ pl__text_char_from_utf8(uint32_t* outChar, const char* text)
 
     // Copy at most 'iLen' bytes, stop copying at 0 or past in_text_end. Branch predictor does a good job here,
     // so it is fast even with excessive branching.
-    char s[4] = {};
+    char s[4] = {0};
 
     if(text + 0 < cPtrTextEnd){ s[0] = text[0];}
     if(text + 1 < cPtrTextEnd){ s[1] = text[1];}
@@ -1003,6 +1003,7 @@ pl_add_default_font(plFontAtlas* ptrAtlas)
         .hOverSampling = 1,
         .vOverSampling = 1
     };
+    
     plFontRange range = {
         .firstCodePoint = 0x0020,
         .charCount = 0x00FF - 0x0020

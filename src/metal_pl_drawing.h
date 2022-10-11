@@ -101,41 +101,6 @@ pl_setup_draw_context_metal(plDrawContext* ctx, id<MTLDevice> device)
     ctx->_platformData = [[MetalContext alloc] init];
     MetalContext* metalCtx = ctx->_platformData;
     metalCtx.device = device;
-
-    // // create font atlas texture
-    // MTLTextureDescriptor *textureDescriptor = [[MTLTextureDescriptor alloc] init];
-
-    // // Indicate that each pixel has a blue, green, red, and alpha channel, where each channel is
-    // // an 8-bit unsigned normalized value (i.e. 0 maps to 0.0 and 255 maps to 1.0)
-    // textureDescriptor.pixelFormat = MTLPixelFormatRGBA8Unorm;
-
-    // // Set the pixel dimensions of the texture
-    // textureDescriptor.width = 2;
-    // textureDescriptor.height = 2;
-
-    // // Create the texture from the device by using the descriptor
-    // metalCtx.fontTexture = [device newTextureWithDescriptor:textureDescriptor];  
-
-    // MTLRegion region = {
-    //     { 0, 0, 0 }, // MTLOrigin
-    //     {2, 2, 1}    // MTLSize
-    // };
-
-    // NSUInteger bytesPerRow = 4 * 2;
-
-    // unsigned char image[] = {
-    //     255,   255,  255, 255,
-    //     0, 255,   0, 255,
-    //     0,   0, 255, 255,
-    //     255,   0, 255, 255
-    // };
-
-    // [metalCtx.fontTexture replaceRegion:region
-    //             mipmapLevel:0
-    //             withBytes:image
-    //             bytesPerRow:bytesPerRow];
-
-    // ctx->fontAtlas = metalCtx.fontTexture;
 }
 
 void
