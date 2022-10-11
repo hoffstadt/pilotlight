@@ -21,16 +21,81 @@ Index of this file:
 #include "stb_rect_pack.h"
 #include "stb_truetype.h"
 #include <math.h>
+#include <stdio.h>
 
 //-----------------------------------------------------------------------------
 // [SECTION] internal structs
 //-----------------------------------------------------------------------------
 
-typedef struct plFontFile_t
+typedef struct plDrawList_t
 {
-    char  name[PL_MAX_NAME_LENGTH];
-    unsigned char* data;
-} plFontFile;
+    plDrawContext* ctx;
+    plDrawLayer**  sbSubmittedLayers;
+    plDrawLayer**  sbLayerCache;
+    plDrawLayer**  sbLayersCreated;
+    plDrawCommand* sbDrawCommands;
+    plDrawVertex*  sbVertexBuffer;
+    uint32_t       indexBufferByteSize;
+    uint32_t       layersCreated;
+    void*          _platformData;
+} plDrawList;
+
+typedef struct plFontCustomRect_t
+{
+    uint32_t       width;
+    uint32_t       height;
+    uint32_t       x;
+    uint32_t       y;
+    unsigned char* bytes;
+} plFontCustomRect;
+
+typedef struct plDrawCommand_t
+{
+    uint32_t    vertexOffset;
+    uint32_t    indexOffset;
+    uint32_t    elementCount;
+    uint32_t    layer;
+    plTextureId textureId;
+    bool        sdf;
+} plDrawCommand;
+
+typedef struct plDrawLayer_t
+{
+    char            name[PL_MAX_NAME_LENGTH];
+    plDrawList*     drawlist;
+    plDrawCommand*  sbCommandBuffer;
+    uint32_t*       sbIndexBuffer;
+    plVec2*         sbPath;
+    uint32_t        vertexCount;
+    plDrawCommand*  _lastCommand;
+} plDrawLayer;
+
+typedef struct plFontChar_t
+{
+    uint16_t x0;
+    uint16_t y0;
+    uint16_t x1;
+    uint16_t y1;
+    float    xOff;
+    float    yOff;
+    float    xAdv;
+    float    xOff2;
+    float    yOff2;
+} plFontChar;
+
+typedef struct plFontGlyph_t
+{
+    float x0;
+    float y0;
+    float u0;
+    float v0;
+    float x1;
+    float y1;
+    float u1;
+    float v1;
+    float xAdvance;
+    float leftBearing;  
+} plFontGlyph;
 
 typedef struct plFontPrepData_t
 {
@@ -43,6 +108,14 @@ typedef struct plFontPrepData_t
     uint32_t          area;
 } plFontPrepData;
 
+typedef struct plDrawContext_t
+{
+    plDrawList** sbDrawlists;
+    uint64_t     frameCount;
+    plFontAtlas* fontAtlas;
+    void*        _platformData;
+} plDrawContext;
+
 //-----------------------------------------------------------------------------
 // [SECTION] internal api
 //-----------------------------------------------------------------------------
@@ -54,17 +127,21 @@ static void  pl__add_index(plDrawLayer* layer, uint32_t vertexStart, uint32_t i0
 static float pl__get_max(float v1, float v2) { return v1 > v2 ? v1 : v2;}
 static int   pl__get_min(int v1, int v2)     { return v1 < v2 ? v1 : v2;}
 static int   pl__text_char_from_utf8(uint32_t* outChar, const char* text);
+static char* pl__read_file(const char* file);
 
 //-----------------------------------------------------------------------------
 // [SECTION] implementation
 //-----------------------------------------------------------------------------
 
-void
-pl_create_drawlist(plDrawContext* ctx, plDrawList* drawlistOut)
+plDrawList*
+pl_create_drawlist(plDrawContext* ctx)
 {
-   memset(drawlistOut, 0, sizeof(plDrawList));
-   drawlistOut->ctx = ctx;
-   pl_sb_push(ctx->sbDrawlists, drawlistOut);
+
+    plDrawList* drawlist = PL_ALLOC(sizeof(plDrawList));
+    memset(drawlist, 0, sizeof(plDrawList));
+    drawlist->ctx = ctx;
+    pl_sb_push(ctx->sbDrawlists, drawlist);
+    return drawlist;
 }
 
 plDrawLayer*
@@ -166,68 +243,75 @@ pl_add_text(plDrawLayer* layer, plFont* font, float size, plVec2 p, plVec4 color
             p.x = originalPosition.x;
             p.y += lineSpacing;
         }
-
-        bool glyphFound = false;
-        for(uint32_t i = 0u; i < pl_sb_size(font->config.sbRanges); i++)
+        else if(c == '\r')
         {
-            if (c >= (uint32_t)font->config.sbRanges[i].firstCodePoint && c < (uint32_t)font->config.sbRanges[i].firstCodePoint + (uint32_t)font->config.sbRanges[i].charCount) 
-            {
-
-                
-                float x0,y0,s0,t0; // top-left
-                float x1,y1,s1,t1; // bottom-right
-
-                const plFontGlyph* glyph = &font->sbGlyphs[font->sbCodePoints[c]];
-
-                // adjust for left side bearing if first char
-                if(firstCharacter)
-                {
-                    if(glyph->leftBearing > 0.0f) p.x += glyph->leftBearing * scale;
-                    firstCharacter = false;
-                }
-
-                x0 = p.x + glyph->x0 * scale;
-                x1 = p.x + glyph->x1 * scale;
-                y0 = p.y + glyph->y0 * scale;
-                y1 = p.y + glyph->y1 * scale;
-
-                if(wrap > 0.0f && x1 > originalPosition.x + wrap)
-                {
-                    x0 = originalPosition.x + glyph->x0 * scale;
-                    y0 = y0 + lineSpacing;
-                    x1 = originalPosition.x + glyph->x1 * scale;
-                    y1 = y1 + lineSpacing;
-
-                    p.x = originalPosition.x;
-                    p.y += lineSpacing;
-                }
-                s0 = glyph->u0;
-                t0 = glyph->v0;
-                s1 = glyph->u1;
-                t1 = glyph->v1;
-
-                p.x += glyph->xAdvance * scale;
-                if(c != ' ')
-                {
-                    pl__prepare_draw_command(layer, font->parentAtlas->texture, font->config.sdf);
-                    pl__reserve_triangles(layer, 6, 4);
-                    uint32_t uVtxStart = pl_sb_size(layer->drawlist->sbVertexBuffer);
-                    pl__add_vertex(layer, (plVec2){x0, y0}, color, (plVec2){s0, t0});
-                    pl__add_vertex(layer, (plVec2){x1, y0}, color, (plVec2){s1, t0});
-                    pl__add_vertex(layer, (plVec2){x1, y1}, color, (plVec2){s1, t1});
-                    pl__add_vertex(layer, (plVec2){x0, y1}, color, (plVec2){s0, t1});
-
-                    pl__add_index(layer, uVtxStart, 1, 0, 2);
-                    pl__add_index(layer, uVtxStart, 2, 0, 3);
-                }
-
-                glyphFound = true;
-                break;
-            }
+            // do nothing
         }
-        PL_ASSERT(glyphFound && "Glyph not found");
-    }
+        else
+        {
 
+            bool glyphFound = false;
+            for(uint32_t i = 0u; i < pl_sb_size(font->config.sbRanges); i++)
+            {
+                if (c >= (uint32_t)font->config.sbRanges[i].firstCodePoint && c < (uint32_t)font->config.sbRanges[i].firstCodePoint + (uint32_t)font->config.sbRanges[i].charCount) 
+                {
+
+                    
+                    float x0,y0,s0,t0; // top-left
+                    float x1,y1,s1,t1; // bottom-right
+
+                    const plFontGlyph* glyph = &font->sbGlyphs[font->sbCodePoints[c]];
+
+                    // adjust for left side bearing if first char
+                    if(firstCharacter)
+                    {
+                        if(glyph->leftBearing > 0.0f) p.x += glyph->leftBearing * scale;
+                        firstCharacter = false;
+                    }
+
+                    x0 = p.x + glyph->x0 * scale;
+                    x1 = p.x + glyph->x1 * scale;
+                    y0 = p.y + glyph->y0 * scale;
+                    y1 = p.y + glyph->y1 * scale;
+
+                    if(wrap > 0.0f && x1 > originalPosition.x + wrap)
+                    {
+                        x0 = originalPosition.x + glyph->x0 * scale;
+                        y0 = y0 + lineSpacing;
+                        x1 = originalPosition.x + glyph->x1 * scale;
+                        y1 = y1 + lineSpacing;
+
+                        p.x = originalPosition.x;
+                        p.y += lineSpacing;
+                    }
+                    s0 = glyph->u0;
+                    t0 = glyph->v0;
+                    s1 = glyph->u1;
+                    t1 = glyph->v1;
+
+                    p.x += glyph->xAdvance * scale;
+                    if(c != ' ')
+                    {
+                        pl__prepare_draw_command(layer, font->parentAtlas->texture, font->config.sdf);
+                        pl__reserve_triangles(layer, 6, 4);
+                        uint32_t uVtxStart = pl_sb_size(layer->drawlist->sbVertexBuffer);
+                        pl__add_vertex(layer, (plVec2){x0, y0}, color, (plVec2){s0, t0});
+                        pl__add_vertex(layer, (plVec2){x1, y0}, color, (plVec2){s1, t0});
+                        pl__add_vertex(layer, (plVec2){x1, y1}, color, (plVec2){s1, t1});
+                        pl__add_vertex(layer, (plVec2){x0, y1}, color, (plVec2){s0, t1});
+
+                        pl__add_index(layer, uVtxStart, 1, 0, 2);
+                        pl__add_index(layer, uVtxStart, 2, 0, 3);
+                    }
+
+                    glyphFound = true;
+                    break;
+                }
+            }
+
+            PL_ASSERT(glyphFound && "Glyph not found");
+        }   
+    }
 }
 
 void
@@ -242,6 +326,33 @@ pl_add_triangle_filled(plDrawLayer* layer, plVec2 p0, plVec2 p1, plVec2 p2, plVe
     pl__add_vertex(layer, p2, color, (plVec2){layer->drawlist->ctx->fontAtlas->whiteUv[0], layer->drawlist->ctx->fontAtlas->whiteUv[1]});
 
     pl__add_index(layer, vertexStart, 0, 1, 2);
+}
+
+void
+pl_add_rect_filled(plDrawLayer* layer, plVec2 minP, plVec2 maxP, plVec4 color)
+{
+    pl__prepare_draw_command(layer, layer->drawlist->ctx->fontAtlas->texture, false);
+    pl__reserve_triangles(layer, 6, 4);
+
+    const plVec2 bottomLeft = { minP.x, maxP.y };
+    const plVec2 topRight =   { maxP.x, minP.y };
+
+    uint32_t vertexStart = pl_sb_size(layer->drawlist->sbVertexBuffer);
+    pl__add_vertex(layer, minP,       color, (plVec2){layer->drawlist->ctx->fontAtlas->whiteUv[0], layer->drawlist->ctx->fontAtlas->whiteUv[1]});
+    pl__add_vertex(layer, bottomLeft, color, (plVec2){layer->drawlist->ctx->fontAtlas->whiteUv[0], layer->drawlist->ctx->fontAtlas->whiteUv[1]});
+    pl__add_vertex(layer, maxP,       color, (plVec2){layer->drawlist->ctx->fontAtlas->whiteUv[0], layer->drawlist->ctx->fontAtlas->whiteUv[1]});
+    pl__add_vertex(layer, topRight,   color, (plVec2){layer->drawlist->ctx->fontAtlas->whiteUv[0], layer->drawlist->ctx->fontAtlas->whiteUv[1]});
+
+    pl__add_index(layer, vertexStart, 0, 1, 2);
+    pl__add_index(layer, vertexStart, 0, 2, 3);
+}
+
+void
+pl_add_font_from_file_ttf(plFontAtlas* atlas, plFontConfig config, const char* file)
+{
+    void* data = pl__read_file(file);
+    pl_add_font_from_memory_ttf(atlas, config, data);
+    PL_FREE(data);
 }
 
 void
@@ -308,6 +419,18 @@ pl_add_font_from_memory_ttf(plFontAtlas* atlas, plFontConfig config, void* data)
     int maxCodePoint = 0;
     totalCharCount = 0u;
     bool missingGlyphAdded = false;
+
+    for(uint32_t i = 0; i < pl_sb_size(font.config.sbRanges); i++)
+    {
+        plFontRange* range = &font.config.sbRanges[i];
+        prep.uTotalCharCount += range->charCount;
+    }
+
+    if(!font.config.sdf)
+    {
+        prep.rects = PL_ALLOC(sizeof(stbrp_rect) * prep.uTotalCharCount);
+    }
+
     for(uint32_t i = 0; i < pl_sb_size(font.config.sbRanges); i++)
     {
         plFontRange* range = &font.config.sbRanges[i];
@@ -324,7 +447,6 @@ pl_add_font_from_memory_ttf(plFontAtlas* atlas, plFontConfig config, void* data)
         prep.ranges[i].num_chars = range->charCount;
         prep.ranges[i].h_oversample = (unsigned char) font.config.hOverSampling;
         prep.ranges[i].v_oversample = (unsigned char) font.config.vOverSampling;
-        prep.uTotalCharCount += range->charCount;
 
         // flag all characters as NOT packed
         memset(prep.ranges[i].chardata_for_range, 0, sizeof(stbtt_packedchar) * range->charCount);
@@ -366,8 +488,6 @@ pl_add_font_from_memory_ttf(plFontAtlas* atlas, plFontConfig config, void* data)
         }
         else // regular font
         {
-            prep.rects = PL_ALLOC(sizeof(stbrp_rect) * prep.uTotalCharCount);
-
             for(uint32_t j = 0; j < range->charCount; j++)
             {
                 int codepoint = 0;
@@ -404,6 +524,124 @@ pl_add_font_from_memory_ttf(plFontAtlas* atlas, plFontConfig config, void* data)
     font.parentAtlas = atlas;
     pl_sb_push(atlas->sbFonts, font);
     pl_sb_push(atlas->_sbPrepData, prep);
+}
+
+plVec2
+pl_calculate_text_size(plFont* font, float size, const char* text, float wrap)
+{
+    plVec2 result = {0};
+    plVec2 cursor = {0};
+
+    float scale = size > 0.0f ? size / font->config.fontSize : 1.0f;
+
+    float lineSpacing = scale * font->lineSpacing;
+    const plVec2 originalPosition = {0};
+    bool firstCharacter = true;
+
+    while(*text)
+    {
+        uint32_t c = (uint32_t)*text;
+        if(c < 0x80)
+            text += 1;
+        else
+        {
+            text += pl__text_char_from_utf8(&c, text);
+            if(c == 0) // malformed UTF-8?
+                break;
+        }
+
+        if(c == '\n')
+        {
+            result.x = originalPosition.x;
+            result.y += lineSpacing;
+        }
+        else if(c == '\r')
+        {
+            // do nothing
+        }
+        else
+        {
+
+            bool glyphFound = false;
+            for(uint32_t i = 0u; i < pl_sb_size(font->config.sbRanges); i++)
+            {
+                if (c >= (uint32_t)font->config.sbRanges[i].firstCodePoint && c < (uint32_t)font->config.sbRanges[i].firstCodePoint + (uint32_t)font->config.sbRanges[i].charCount) 
+                {
+
+                    
+                    float x0,y0,s0,t0; // top-left
+                    float x1,y1,s1,t1; // bottom-right
+
+                    const plFontGlyph* glyph = &font->sbGlyphs[font->sbCodePoints[c]];
+
+                    // adjust for left side bearing if first char
+                    if(firstCharacter)
+                    {
+                        if(glyph->leftBearing > 0.0f) cursor.x += glyph->leftBearing * scale;
+                        firstCharacter = false;
+                    }
+
+                    x0 = cursor.x + glyph->x0 * scale;
+                    x1 = cursor.x + glyph->x1 * scale;
+                    y0 = cursor.y + glyph->y0 * scale;
+                    y1 = cursor.y + glyph->y1 * scale;
+
+                    if(wrap > 0.0f && x1 > originalPosition.x + wrap)
+                    {
+                        x0 = originalPosition.x + glyph->x0 * scale;
+                        y0 = y0 + lineSpacing;
+                        x1 = originalPosition.x + glyph->x1 * scale;
+                        y1 = y1 + lineSpacing;
+
+                        cursor.x = originalPosition.x;
+                        cursor.y += lineSpacing;
+                    }
+                    s0 = glyph->u0;
+                    t0 = glyph->v0;
+                    s1 = glyph->u1;
+                    t1 = glyph->v1;
+
+                    if(x1 > result.x) result.x = x1;
+                    if(y1 > result.y) result.y = y1;
+
+                    cursor.x += glyph->xAdvance * scale;
+                    glyphFound = true;
+                    break;
+                }
+            }
+
+            PL_ASSERT(glyphFound && "Glyph not found");
+        }   
+    }
+
+    return result;
+}
+
+void
+pl__cleanup_draw_context(plDrawContext* ctx)
+{
+    for(uint32_t i = 0u; i < pl_sb_size(ctx->sbDrawlists); i++)
+    {
+        plDrawList* drawlist = ctx->sbDrawlists[i];
+        for(uint32_t j = 0; j < pl_sb_size(drawlist->sbSubmittedLayers); j++)
+        {
+            pl_sb_free(drawlist->sbSubmittedLayers[j]->sbCommandBuffer);
+            pl_sb_free(drawlist->sbSubmittedLayers[j]->sbIndexBuffer);   
+            pl_sb_free(drawlist->sbSubmittedLayers[j]->sbPath);  
+        }
+
+        for(uint32_t j = 0; j < pl_sb_size(drawlist->sbLayersCreated); j++)
+        {
+            PL_FREE(drawlist->sbLayersCreated[j]);
+        }
+        pl_sb_free(drawlist->sbDrawCommands);
+        pl_sb_free(drawlist->sbVertexBuffer);
+        pl_sb_free(drawlist->sbLayerCache);
+        pl_sb_free(drawlist->sbLayersCreated);
+        pl_sb_free(drawlist->sbSubmittedLayers);
+        PL_FREE(drawlist);
+    }
+    pl_sb_free(ctx->sbDrawlists);
 }
 
 void
@@ -599,6 +837,25 @@ pl__build_font_atlas(plFontAtlas* atlas)
     PL_FREE(rects);
 }
 
+void
+pl__cleanup_font_atlas(plFontAtlas* atlas)
+{
+    for(uint32_t i = 0; i < pl_sb_size(atlas->sbFonts); i++)
+    {
+        plFont* font = &atlas->sbFonts[i];
+        pl_sb_free(font->config.sbRanges);
+        pl_sb_free(font->config.sbIndividualChars);
+        pl_sb_free(font->sbCodePoints);
+        pl_sb_free(font->sbGlyphs);
+        pl_sb_free(font->sbCharData);
+    }
+    pl_sb_free(atlas->sbCustomRects);
+    pl_sb_free(atlas->sbFonts);
+    pl_sb_free(atlas->_sbPrepData);
+    PL_FREE(atlas->pixelsAsAlpha8);
+    PL_FREE(atlas->pixelsAsRGBA32);
+}
+
 //-----------------------------------------------------------------------------
 // [SECTION] internal api implementation
 //-----------------------------------------------------------------------------
@@ -629,8 +886,10 @@ pl__prepare_draw_command(plDrawLayer* layer, plTextureId textureID, bool sdf)
             .sdf = sdf
         };
         pl_sb_push(layer->sbCommandBuffer, newdrawCommand);
-        layer->_lastCommand = &pl_sb_top(layer->sbCommandBuffer);
+        
     }
+    layer->_lastCommand = &pl_sb_top(layer->sbCommandBuffer);
+    layer->_lastCommand->textureId = textureID;
 }
 
 static void
@@ -723,6 +982,43 @@ pl__text_char_from_utf8(uint32_t* outChar, const char* text)
     return iWanted;
 }
 
+static char*
+pl__read_file(const char* file)
+{
+    FILE* fileHandle = fopen(file, "rb");
+
+    if(fileHandle == NULL)
+    {
+        PL_ASSERT(false && "TTF file not found.");
+        return NULL;
+    }
+
+    // obtain file size
+    fseek(fileHandle, 0, SEEK_END);
+    uint32_t fileSize = ftell(fileHandle);
+    fseek(fileHandle, 0, SEEK_SET);
+
+    // allocate buffer
+    char* data = PL_ALLOC(fileSize);
+
+    // copy file into buffer
+    size_t result = fread(data, sizeof(char), fileSize, fileHandle);
+    if(result != fileSize)
+    {
+        if(feof(fileHandle))
+        {
+            PL_ASSERT(false && "Error reading TTF file: unexpected end of file");
+        }
+        else if (ferror(fileHandle))
+        {
+            PL_ASSERT(false && "Error reading TTF file.");
+        }
+        PL_ASSERT(false && "TTF file not read.");
+    }
+
+    fclose(fileHandle);
+    return data;
+}
 
 //-----------------------------------------------------------------------------
 // [SECTION] default font stuff
@@ -967,41 +1263,23 @@ pl_add_default_font(plFontAtlas* ptrAtlas)
     
     void* data = NULL;
 
-    // check if ttf file is in cache
-    bool bFileInCache = false;
-    // for(uint32_t i = 0; i < plg_sb_size(ptrAtlas->sbFontFileCache_); i++)
-    // {
-    //     if(strncmp(cPtrEmbeddedFontName, ptrAtlas->sbFontFileCache_[i].name, PLG_NAME_MAX_LENGTH) == 0)
-    //     {
-    //         bFileInCache = true;
-    //         ptrData = ptrAtlas->sbFontFileCache_[i].ptrData;
-    //         break;
-    //     }
-    // }
+    int iCompressedTTFSize = (((int)strlen(gcPtrDefaultFontCompressed) + 4) / 5) * 4;
+    void* ptrCompressedTTF = PL_ALLOC((size_t)iCompressedTTFSize);
+    pl__decode85((const unsigned char*)gcPtrDefaultFontCompressed, (unsigned char*)ptrCompressedTTF);
 
-    // load & store file in cache if new
-    if(!bFileInCache)
-    {
-        int iCompressedTTFSize = (((int)strlen(gcPtrDefaultFontCompressed) + 4) / 5) * 4;
-        void* ptrCompressedTTF = PL_ALLOC((size_t)iCompressedTTFSize);
-        pl__decode85((const unsigned char*)gcPtrDefaultFontCompressed, (unsigned char*)ptrCompressedTTF);
+    const uint32_t uDecompressedSize = pl__decompress_length((const unsigned char*)ptrCompressedTTF);
+    data = (unsigned char*)PL_ALLOC(uDecompressedSize);
+    pl__decompress((unsigned char*)data, (const unsigned char*)ptrCompressedTTF, (int)iCompressedTTFSize);
 
-        const uint32_t uDecompressedSize = pl__decompress_length((const unsigned char*)ptrCompressedTTF);
-        data = (unsigned char*)PL_ALLOC(uDecompressedSize);
-        pl__decompress((unsigned char*)data, (const unsigned char*)ptrCompressedTTF, (int)iCompressedTTFSize);
-
-        // plFontFile* ptrFontFileCached = pl_sb_push(ptrAtlas->sbFontFileCache_, {});
-        // strcpy(ptrFontFileCached->name, cPtrEmbeddedFontName);
-        // ptrFontFileCached->ptrData = (unsigned char*)ptrData;
-
-        PL_FREE(ptrCompressedTTF);
-    }
+    PL_FREE(ptrCompressedTTF);
 
     plFontConfig fontConfig = {
         .sdf = false,
         .fontSize = 13.0f,
         .hOverSampling = 1,
-        .vOverSampling = 1
+        .vOverSampling = 1,
+        .onEdgeValue = 255,
+        .sdfPadding = 1
     };
     
     plFontRange range = {

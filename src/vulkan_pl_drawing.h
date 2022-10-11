@@ -758,7 +758,8 @@ pl_submit_drawlist_vulkan(plDrawList* drawlist, float width, float height, VkCom
             if(bCreateNewCommand)
             {
                 layerCommand->indexOffset = globalIdxBufferIndexOffset + layerCommand->indexOffset;
-                pl_sb_push(drawlist->sbDrawCommands, *layerCommand); 
+                pl_sb_push(drawlist->sbDrawCommands, *layerCommand);       
+                lastCommand = layerCommand;
             }
             
         }    
