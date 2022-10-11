@@ -313,6 +313,7 @@ typedef struct plVulkanDrawList_t
 // [SECTION] internal helper forward declarations
 //-----------------------------------------------------------------------------
 
+extern void     pl__cleanup_font_atlas   (plFontAtlas* atlas); // in pl_drawing.c
 extern void     pl__new_draw_frame   (plDrawContext* ctx); // in pl_drawing.c
 static uint32_t pl__find_memory_type(VkPhysicalDeviceMemoryProperties memProps, uint32_t typeFilter, VkMemoryPropertyFlags properties);
 static void     pl__grow_vulkan_vertex_buffer(plDrawList* ptrDrawlist, uint32_t uVtxBufSzNeeded, uint32_t currentFrameIndex);
@@ -410,7 +411,7 @@ pl_create_draw_context_vulkan(VkPhysicalDevice physicalDevice, uint32_t imageCou
         .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         .descriptorCount = 1,
         .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-        .pImmutableSamplers = NULL
+        .pImmutableSamplers = &vulkanDrawContext->fontSampler
     };
 
     VkDescriptorSetLayoutCreateInfo layoutInfo = {
@@ -705,6 +706,22 @@ pl_new_draw_frame(plDrawContext* ctx)
 }
 
 void
+pl_cleanup_font_atlas(plFontAtlas* atlas)
+{
+    plVulkanDrawContext* vulkanDrawCtx = (plVulkanDrawContext*)atlas->ctx->_platformData;
+    plTextureReturn returnTexture = 
+    {
+        .image = vulkanDrawCtx->fontTextureImage,
+        .view = vulkanDrawCtx->fontTextureImageView,
+        .deviceMemory = vulkanDrawCtx->fontTextureMemory,
+        .slFreedFrame = (int64_t)(atlas->ctx->frameCount + vulkanDrawCtx->imageCount*2)
+    };
+    pl_sb_push(vulkanDrawCtx->sbReturnedTextures, returnTexture);
+    vulkanDrawCtx->textureDeletionQueueSize++;
+    pl__cleanup_font_atlas(atlas);
+}
+
+void
 pl_submit_drawlist_vulkan(plDrawList* drawlist, float width, float height, VkCommandBuffer cmdBuf, uint32_t currentFrameIndex)
 {
     if(pl_sb_size(drawlist->sbVertexBuffer) == 0u)
@@ -830,16 +847,6 @@ void
 pl_cleanup_draw_context(plDrawContext* ctx)
 {
     plVulkanDrawContext* vulkanDrawCtx = (plVulkanDrawContext*)ctx->_platformData;
-
-    plTextureReturn returnTexture = 
-    {
-        .image = vulkanDrawCtx->fontTextureImage,
-        .view = vulkanDrawCtx->fontTextureImageView,
-        .deviceMemory = vulkanDrawCtx->fontTextureMemory,
-        .slFreedFrame = (int64_t)(ctx->frameCount + vulkanDrawCtx->imageCount*2)
-    };
-    pl_sb_push(vulkanDrawCtx->sbReturnedTextures, returnTexture);
-    vulkanDrawCtx->textureDeletionQueueSize++;
 
     vkDestroyShaderModule(vulkanDrawCtx->device, vulkanDrawCtx->vtxShdrStgInfo.module, NULL);
     vkDestroyShaderModule(vulkanDrawCtx->device, vulkanDrawCtx->pxlShdrStgInfo.module, NULL);
