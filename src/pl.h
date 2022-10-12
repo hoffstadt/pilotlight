@@ -41,7 +41,7 @@ Index of this file:
 #endif
 
 #if defined(_MSC_VER) //  Microsoft 
-    #define PL_EXPORT extern "C" __declspec(dllexport)
+    #define PL_EXPORT __declspec(dllexport)
 #elif defined(__GNUC__) //  GCC
     #define PL_EXPORT __attribute__((visibility("default")))
 #else //  do nothing and hope for the best?
