@@ -44,6 +44,8 @@ if [ -f ../out/pilot_light ]; then
     rm -f ../out/*.spv
 fi
 
+echo LOCKING > ../out/lock.tmp
+
 ###############################################################################
 #                           Common Settings                                   #
 ###############################################################################
@@ -111,7 +113,25 @@ fi
 
 PL_SOURCES="pl.c"
 
-clang -c -fPIC $PL_SOURCES $PL_DEFINES $PL_COMPILER_FLAGS $PL_INCLUDE_DIRECTORIES -o ../out/pl.o
+clang -c $PL_SOURCES $PL_DEFINES $PL_COMPILER_FLAGS $PL_INCLUDE_DIRECTORIES -o ../out/pl.o
+
+###############################################################################
+#                             apple app lib                                    #
+###############################################################################
+
+PL_SOURCES="metal_app.m ../out/pl.o"
+
+if [ -f "../out/app.so" ]
+then
+    rm ../out/app.so
+fi
+
+clang -shared -fPIC $PL_SOURCES $PL_DEFINES $PL_COMPILER_FLAGS $PL_INCLUDE_DIRECTORIES $PL_LINK_LIBRARIES -o ../out/app.so
+
+if [ $? -ne 0 ]
+then
+    PL_RESULT=${BOLD}${RED}Failed.${NC}
+fi
 
 ###############################################################################
 #                              apple executable                               #
@@ -124,6 +144,9 @@ clang $PL_SOURCES $PL_DEFINES $PL_COMPILER_FLAGS $PL_INCLUDE_DIRECTORIES $PL_LIN
 if [ $? -ne 0 ]
 then
     PL_RESULT=${BOLD}${RED}Failed.${NC}
+elif [ -f "../out/app_0.so" ]
+then
+    rm ../out/app_*.so
 fi
 
 ###############################################################################
@@ -227,3 +250,4 @@ echo ${CYAN}Output binary:       ${NC} ${YELLOW}pilot_light${NC}
 echo ${CYAN}--------------------------------------------------------------------------${NC}
 
 popd >/dev/null
+rm ../out/lock.tmp
