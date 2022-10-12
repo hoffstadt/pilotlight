@@ -188,8 +188,6 @@ pl_submit_drawlist_metal(plDrawList* drawlist, float width, float height, id<MTL
         globalIdxBufferIndexOffset += pl_sb_size(layer->sbIndexBuffer);    
     }
     
-    // bind pipeline
-
     // Try to retrieve a render pipeline state that is compatible with the framebuffer config for this frame
     // The hit rate for this cache should be very near 100%.
     id<MTLRenderPipelineState> renderPipelineState = metalCtx.renderPipelineStateCache[metalCtx.framebufferDescriptor];
@@ -212,10 +210,6 @@ pl_submit_drawlist_metal(plDrawList* drawlist, float width, float height, id<MTL
         metalCtx.renderPipelineStateSDFCache[metalCtx.framebufferDescriptor] = renderPipelineStateSDF;
     }
 
-    [renderEncoder setDepthStencilState:metalCtx.depthStencilState];
-    [renderEncoder setRenderPipelineState:renderPipelineState];
-    [renderEncoder setVertexBuffer:vertexBuffer.buffer offset:0 atIndex:0];
-
     // update uniform buffer
     float L = 0.0f;
     float R = width;
@@ -231,31 +225,26 @@ pl_submit_drawlist_metal(plDrawList* drawlist, float width, float height, id<MTL
         { (R+L)/(L-R),  (T+B)/(B-T), N/(F-N),   1.0f },
     };
     [renderEncoder setVertexBytes:&ortho_projection length:sizeof(ortho_projection) atIndex:1 ];
+    [renderEncoder setDepthStencilState:metalCtx.depthStencilState];
+    [renderEncoder setVertexBuffer:vertexBuffer.buffer offset:0 atIndex:0];
 
-    uint32_t currentDelayIndex = 0u;
+    bool sdf = false;
+    [renderEncoder setRenderPipelineState:renderPipelineState];
     for(uint32_t i = 0u; i < pl_sb_size(drawlist->sbDrawCommands); i++)
     {
         plDrawCommand cmd = drawlist->sbDrawCommands[i];
 
-        if(cmd.sdf)
+        if(cmd.sdf && !sdf)
         {
-            drawlist->sbDrawCommands[currentDelayIndex] = cmd;
-            currentDelayIndex++;
+            [renderEncoder setRenderPipelineState:renderPipelineStateSDF];
+            sdf = true;
         }
-        else
+        else if(!cmd.sdf && sdf)
         {
-            [renderEncoder setFragmentTexture:cmd.textureId atIndex:2];
-            [renderEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:cmd.elementCount indexType:MTLIndexTypeUInt32 indexBuffer:indexBuffer.buffer indexBufferOffset:cmd.indexOffset * sizeof(uint32_t)];
+            [renderEncoder setRenderPipelineState:renderPipelineState];
+            sdf = false;
         }
-    }
 
-    // setup sdf pipeline
-    if(currentDelayIndex > 0)
-        [renderEncoder setRenderPipelineState:renderPipelineStateSDF];
-
-    for(uint32_t i = 0u; i < currentDelayIndex; i++)
-    {
-        plDrawCommand cmd = drawlist->sbDrawCommands[i];
         [renderEncoder setFragmentTexture:cmd.textureId atIndex:2];
         [renderEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:cmd.elementCount indexType:MTLIndexTypeUInt32 indexBuffer:indexBuffer.buffer indexBufferOffset:cmd.indexOffset * sizeof(uint32_t)];
     }

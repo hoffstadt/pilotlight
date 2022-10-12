@@ -140,6 +140,7 @@ pl_app_render()
     pl_add_triangle_filled(gAppData.bgDrawLayer, (plVec2){10.0f, 50.0f}, (plVec2){10.0f, 150.0f}, (plVec2){150.0f, 50.0f}, (plVec4){1.0f, 0.0f, 0.0f, 1.0f});
     plVec2 textSize = pl_calculate_text_size(&gAppData.fontAtlas.sbFonts[0], 13.0f, "Pilot Light\nGraphics", 0.0f);
     pl_add_rect_filled(gAppData.bgDrawLayer, (plVec2){10.0f, 10.0f}, (plVec2){10.0f + textSize.x, 10.0f + textSize.y}, (plVec4){0.0f, 0.0f, 0.8f, 0.5f});
+    pl_add_line(gAppData.bgDrawLayer, (plVec2){500.0f, 10.0f}, (plVec2){10.0f, 500.0f}, (plVec4){1.0f, 1.0f, 1.0f, 0.5f}, 2.0f);
     
     // submit draw layers
     pl_submit_draw_layer(gAppData.bgDrawLayer);

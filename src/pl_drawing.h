@@ -109,6 +109,8 @@ void pl_new_draw_frame   (plDrawContext* ctx); // implemented by backend
 void pl_submit_draw_layer(plDrawLayer* layer);
 
 // drawing
+void pl_add_line           (plDrawLayer* layer, plVec2 p0, plVec2 p1, plVec4 color, float thickness);
+void pl_add_lines          (plDrawLayer* layer, plVec2* points, uint32_t count, plVec4 color, float thickness);
 void pl_add_text           (plDrawLayer* layer, plFont* font, float size, plVec2 p, plVec4 color, const char* text, float wrap);
 void pl_add_triangle_filled(plDrawLayer* layer, plVec2 p0, plVec2 p1, plVec2 p2, plVec4 color);
 void pl_add_rect_filled    (plDrawLayer* layer, plVec2 minP, plVec2 maxP, plVec4 color);

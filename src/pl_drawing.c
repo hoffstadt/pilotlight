@@ -129,6 +129,21 @@ static int   pl__get_min(int v1, int v2)     { return v1 < v2 ? v1 : v2;}
 static int   pl__text_char_from_utf8(uint32_t* outChar, const char* text);
 static char* pl__read_file(const char* file);
 
+// math
+#define pl__add_vec2(left, right)      (plVec2){(left).x + (right).x, (left).y + (right).y}
+#define pl__subtract_vec2(left, right) (plVec2){(left).x - (right).x, (left).y - (right).y}
+#define pl__mul_vec2_f(left, right)    (plVec2){(left).x * (right), (left).y * (right)}
+#define pl__mul_f_vec2(left, right)    (plVec2){(left) * (right).x, (left) * (right).y}
+
+// stateful drawing
+#define pl__submit_path(layer, color, thickness)\
+    pl_add_lines((layer), (layer)->sbPath, pl_sb_size((layer)->sbPath) - 1, (color), (thickness));\
+    pl_sb_reset((layer)->sbPath);
+
+#define PL_NORMALIZE2F_OVER_ZERO(VX,VY) \
+    { float d2 = (VX) * (VX) + (VY) * (VY); \
+    if (d2 > 0.0f) { float inv_len = 1.0f / sqrtf(d2); (VX) *= inv_len; (VY) *= inv_len; } } (void)0
+
 //-----------------------------------------------------------------------------
 // [SECTION] implementation
 //-----------------------------------------------------------------------------
@@ -215,6 +230,51 @@ pl_submit_draw_layer(plDrawLayer* layer)
 {
     pl_sb_push(layer->drawlist->sbSubmittedLayers, layer);
     layer->drawlist->indexBufferByteSize += pl_sb_size(layer->sbIndexBuffer) * sizeof(uint32_t);
+}
+
+void
+pl_add_line(plDrawLayer* layer, plVec2 p0, plVec2 p1, plVec4 color, float thickness)
+{
+    pl_sb_push(layer->sbPath, p0);
+    pl_sb_push(layer->sbPath, p1);
+    pl__submit_path(layer, color, thickness);
+}
+
+void
+pl_add_lines(plDrawLayer* layer, plVec2* points, uint32_t count, plVec4 color, float thickness)
+{
+    pl__prepare_draw_command(layer, layer->drawlist->ctx->fontAtlas->texture, false);
+    pl__reserve_triangles(layer, 6 * count, 4 * count);
+
+    for(uint32_t i = 0u; i < count; i++)
+    {
+        float dx = points[i + 1].x - points[i].x;
+        float dy = points[i + 1].y - points[i].y;
+        PL_NORMALIZE2F_OVER_ZERO(dx, dy);
+
+        plVec2 normalVector = 
+        {
+            .x = dy,
+            .y = -dx
+        };
+
+        plVec2 cornerPoints[4] = 
+        {
+            pl__subtract_vec2(points[i],     pl__mul_vec2_f(normalVector, thickness / 2.0f)),
+            pl__subtract_vec2(points[i + 1], pl__mul_vec2_f(normalVector, thickness / 2.0f)),
+            pl__add_vec2(     points[i + 1], pl__mul_vec2_f(normalVector, thickness / 2.0f)),
+            pl__add_vec2(     points[i],     pl__mul_vec2_f(normalVector, thickness / 2.0f))
+        };
+
+        uint32_t vertexStart = pl_sb_size(layer->drawlist->sbVertexBuffer);
+        pl__add_vertex(layer, cornerPoints[0], color, (plVec2){layer->drawlist->ctx->fontAtlas->whiteUv[0], layer->drawlist->ctx->fontAtlas->whiteUv[1]});
+        pl__add_vertex(layer, cornerPoints[1], color, (plVec2){layer->drawlist->ctx->fontAtlas->whiteUv[0], layer->drawlist->ctx->fontAtlas->whiteUv[1]});
+        pl__add_vertex(layer, cornerPoints[2], color, (plVec2){layer->drawlist->ctx->fontAtlas->whiteUv[0], layer->drawlist->ctx->fontAtlas->whiteUv[1]});
+        pl__add_vertex(layer, cornerPoints[3], color, (plVec2){layer->drawlist->ctx->fontAtlas->whiteUv[0], layer->drawlist->ctx->fontAtlas->whiteUv[1]});
+
+        pl__add_index(layer, vertexStart, 0, 1, 2);
+        pl__add_index(layer, vertexStart, 0, 2, 3);
+    }  
 }
 
 void

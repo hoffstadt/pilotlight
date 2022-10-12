@@ -799,42 +799,28 @@ pl_submit_drawlist_vulkan(plDrawList* drawlist, float width, float height, VkCom
     };
     PL_VULKAN(vkFlushMappedMemoryRanges(vulkanData->device, 2, range));
 
-
-    // setup regular pipeline
-    vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, drawlistVulkanData->regularPipeline);  
     VkDeviceSize offsets = { 0u };
     vkCmdBindIndexBuffer(cmdBuf, drawlistVulkanData->sbIndexBuffer[currentFrameIndex], 0u, VK_INDEX_TYPE_UINT32);
     vkCmdBindVertexBuffers(cmdBuf, 0, 1, &drawlistVulkanData->sbVertexBuffer[currentFrameIndex], &offsets);
 
     float fScale[] = { 2.0f / width, 2.0f / height};
     float fTranslate[] = {-1.0f, -1.0f};
-
-    uint32_t uCurrentDelayIndex = 0u;
+    bool sdf = false;
+    vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, drawlistVulkanData->regularPipeline); 
     for(uint32_t i = 0u; i < pl_sb_size(drawlist->sbDrawCommands); i++)
     {
         plDrawCommand cmd = drawlist->sbDrawCommands[i];
 
-        if(cmd.sdf) // delay
+        if(cmd.sdf && !sdf) // delay
         {
-            drawlist->sbDrawCommands[uCurrentDelayIndex] = cmd;
-            uCurrentDelayIndex++;
+            vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, drawlistVulkanData->sdfPipeline); 
+            sdf = true;
         }
-        else
+        else if(!cmd.sdf && sdf)
         {
-            vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, vulkanData->drawlistPipelineLayout, 0, 1, (const VkDescriptorSet*)&cmd.textureId, 0u, NULL);
-            vkCmdPushConstants(cmdBuf, vulkanData->drawlistPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(float) * 0, sizeof(float) * 2, fScale);
-            vkCmdPushConstants(cmdBuf, vulkanData->drawlistPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(float) * 2, sizeof(float) * 2, fTranslate);
-            vkCmdDrawIndexed(cmdBuf, cmd.elementCount, 1, cmd.indexOffset, 0, 0);
+            vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, drawlistVulkanData->regularPipeline); 
+            sdf = false;
         }
-    }
-
-    // setup sdf pipeline
-    if(uCurrentDelayIndex > 0)
-        vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, drawlistVulkanData->sdfPipeline); 
-
-    for(uint32_t i = 0u; i < uCurrentDelayIndex; i++)
-    {
-        plDrawCommand cmd = drawlist->sbDrawCommands[i];
 
         vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, vulkanData->drawlistPipelineLayout, 0, 1, (const VkDescriptorSet*)&cmd.textureId, 0u, NULL);
         vkCmdPushConstants(cmdBuf, vulkanData->drawlistPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(float) * 0, sizeof(float) * 2, fScale);
