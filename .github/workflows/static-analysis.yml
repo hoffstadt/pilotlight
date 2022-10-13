@@ -40,6 +40,7 @@ jobs:
           fi
       - name: Static Analysis
         run: |
+          cd $GITHUB_WORKSPACE
           if [[ ! -f pvs-studio.lic ]];
           then
             echo "PVS Studio license is missing. No analysis will be performed."
@@ -47,12 +48,11 @@ jobs:
             echo "You may use a free license. More information at https://www.viva64.com/en/b/0457/"
             exit 0
           fi
-          cd $GITHUB_WORKSPACE
           cd src
           chmod +x build.sh
           pvs-studio-analyzer trace -- ./build.sh
-          pvs-studio-analyzer analyze -e ./dependencies -l pvs-studio.lic -o pvs-studio.log
-          plog-converter -a 'GA:1,2;OP:1' -t fullhtml -o pvs-studio.html -w pvs-studio.log
+          pvs-studio-analyzer analyze -e ../dependencies -l ../pvs-studio.lic -o ../pvs-studio.log
+          plog-converter -a 'GA:1,2;OP:1' -t fullhtml -o ../pvs-studio.html -w ../pvs-studio.log
           cd ..
           test -f ./out/pilot_light || exit 1
       - name: Archive Results
