@@ -21,6 +21,7 @@ jobs:
           # The Secret variable setup in GitHub must be in format: "name_or_email key", on a single line
           PVS_STUDIO_LICENSE: ${{ secrets.PVS_STUDIO_LICENSE }}
         run: |
+          cd $GITHUB_WORKSPACE
           sudo apt install libx11-dev
           sudo apt install libxkbcommon-x11-dev
           sudo apt install libx11-xcb-dev
