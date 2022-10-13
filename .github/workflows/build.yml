@@ -32,6 +32,7 @@ jobs:
         ./VulkanSDK.exe --accept-licenses --default-answer --confirm-command install
 
     - name: Build Pilot Light
+      shell: cmd
       run: |
         cd $GITHUB_WORKSPACE
         cd src
