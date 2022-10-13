@@ -1,0 +1,34 @@
+name: Build
+
+on:
+
+  schedule:
+    - cron: '0 1 * * 1'
+
+  push:
+
+    branches:
+      - master
+      - feature/*
+
+  pull_request:
+
+  workflow_dispatch:
+    
+jobs:
+
+  build-MacOS:
+    
+    runs-on: MacOS-latest
+
+    steps:
+
+    - name: Checkout
+      uses: actions/checkout@v2
+    
+    - name: Build Pilot Light
+      run: |
+        cd $GITHUB_WORKSPACE
+        cd src
+        chmod +x build.sh
+        ./build.sh
