@@ -15,13 +15,13 @@ Index of this file:
 //-----------------------------------------------------------------------------
 
 #include "pl_os.h"
-#include <stdlib.h> // malloc
-#include <stdio.h>  // file api
-#include <string.h> // strncpy
+#include <stdlib.h>   // malloc
+#include <stdio.h>    // file api
+#include <string.h>   // strncpy
 #include <sys/stat.h> // timespec
 #include <copyfile.h> // copyfile
-#include <dlfcn.h> // dlopen, dlsym, dlclose
-#include <time.h> // nanosleep
+#include <dlfcn.h>    // dlopen, dlsym, dlclose
+#include <time.h>     // nanosleep
 
 //-----------------------------------------------------------------------------
 // [SECTION] internal structs

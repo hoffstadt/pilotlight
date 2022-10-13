@@ -20,6 +20,7 @@ Index of this file:
 #include "pl.h"
 #include "vulkan_pl.h"
 #include "vulkan_pl_drawing.h"
+#include <string.h> // memset
 
 //-----------------------------------------------------------------------------
 // [SECTION] structs

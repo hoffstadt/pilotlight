@@ -116,7 +116,7 @@ PL_SOURCES="pl.c"
 clang -c $PL_SOURCES $PL_DEFINES $PL_COMPILER_FLAGS $PL_INCLUDE_DIRECTORIES -o ../out/pl.o
 
 ###############################################################################
-#                             apple app lib                                    #
+#                             apple app lib                                   #
 ###############################################################################
 
 PL_SOURCES="metal_app.m ../out/pl.o"
@@ -185,7 +185,7 @@ else
 fi
 
 if [ -d /usr/include/vulkan ]; then
-PL_INCLUDE_DIRECTORIES+=" -I/usr/include/vulkan"
+  PL_INCLUDE_DIRECTORIES+=" -I/usr/include/vulkan"
 fi
 
 # common libraries & frameworks
@@ -216,17 +216,42 @@ fi
 #                              linux pl lib                                   #
 ###############################################################################
 
-gcc -c -fPIC pl.c $PL_DEFINES $PL_COMPILER_FLAGS $PL_INCLUDE_DIRECTORIES -o ../out/pl.o
+PL_SOURCES="pl.c"
+
+gcc -c -fPIC $PL_SOURCES $PL_DEFINES $PL_COMPILER_FLAGS $PL_INCLUDE_DIRECTORIES -o ../out/pl.o
+
+###############################################################################
+#                             linux app lib                                   #
+###############################################################################
+
+PL_SOURCES="vulkan_app.c ../out/pl.o"
+
+if [ -f "../out/app.so" ]
+then
+    rm ../out/app.so
+fi
+
+gcc -shared -fPIC $PL_SOURCES $PL_DEFINES $PL_COMPILER_FLAGS $PL_INCLUDE_DIRECTORIES $PL_LINK_LIBRARIES -o ../out/app.so
+
+if [ $? -ne 0 ]
+then
+    PL_RESULT=${BOLD}${RED}Failed.${NC}
+fi
 
 ###############################################################################
 #                              linux executable                               #
 ###############################################################################
 
-gcc linux_pl.c ../out/pl.o $PL_DEFINES $PL_COMPILER_FLAGS $PL_INCLUDE_DIRECTORIES $PL_LINK_DIRECTORIES $PL_LINK_FLAGS $PL_LINK_LIBRARIES -o ../out/pilot_light
+PL_SOURCES="linux_pl.c ../out/pl.o"
+
+gcc $PL_SOURCES $PL_DEFINES $PL_COMPILER_FLAGS $PL_INCLUDE_DIRECTORIES $PL_LINK_DIRECTORIES $PL_LINK_FLAGS $PL_LINK_LIBRARIES -o ../out/pilot_light
 
 if [ $? -ne 0 ]
 then
     PL_RESULT=${BOLD}${RED}Failed.${NC}
+elif [ -f "../out/app_0.so" ]
+then
+    rm ../out/app_*.so
 fi
 
 ###############################################################################
