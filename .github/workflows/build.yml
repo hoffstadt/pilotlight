@@ -29,7 +29,7 @@ jobs:
     - name: Install Dependencies
       run: |
         Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/1.3.224.1/windows/VulkanSDK-1.3.224.1-Installer.exe" -OutFile VulkanSDK.exe
-        VulkanSDK.exe -Wait -PassThru -ArgumentList @("/S");
+        ./VulkanSDK.exe -Wait -PassThru -ArgumentList @("/S");
 
     - name: Build Pilot Light
       run: |
