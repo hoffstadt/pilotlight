@@ -32,5 +32,5 @@ jobs:
         cd src
         chmod +x build.sh
         ./build.sh
-        test -f ./out/pilot_light || run: exit 1
+        test -f ./out/pilot_light || exit 1
 
