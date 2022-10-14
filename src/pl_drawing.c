@@ -76,13 +76,9 @@ pl_create_drawlist(plDrawContext* ctx)
 {
 
     plDrawList* drawlist = PL_ALLOC(sizeof(plDrawList));
-    PL_ASSERT(drawlist);
-    if(drawlist)
-    {
-        memset(drawlist, 0, sizeof(plDrawList));
-        drawlist->ctx = ctx;
-        pl_sb_push(ctx->sbDrawlists, drawlist);
-    }
+    memset(drawlist, 0, sizeof(plDrawList));
+    drawlist->ctx = ctx;
+    pl_sb_push(ctx->sbDrawlists, drawlist);
     return drawlist;
 }
 
@@ -101,15 +97,11 @@ pl_request_draw_layer(plDrawList* drawlist, const char* name)
 
    else // create new layer
    {
-      drawlist->layersCreated++;
-      layer = PL_ALLOC(sizeof(plDrawLayer));
-      PL_ASSERT(layer);
-      if(layer)
-      {
+        drawlist->layersCreated++;
+        layer = PL_ALLOC(sizeof(plDrawLayer));
         memset(layer, 0, sizeof(plDrawLayer));
         layer->drawlist = drawlist;
         pl_sb_push(drawlist->sbLayersCreated, layer);
-      }
    }
 
    if(name)
@@ -402,11 +394,7 @@ pl_add_font_from_memory_ttf(plFontAtlas* atlas, plFontConfig config, void* data)
         pl_sb_reserve(atlas->sbCustomRects, pl_sb_size(atlas->sbCustomRects) + totalCharCount); // is this correct
 
     prep.ranges = PL_ALLOC(sizeof(stbtt_pack_range) * pl_sb_size(font.config.sbRanges));
-    PL_ASSERT(prep.ranges);
-    if(prep.ranges)
-    {
-        memset(prep.ranges, 0, sizeof(stbtt_pack_range) * pl_sb_size(font.config.sbRanges));
-    }
+    memset(prep.ranges, 0, sizeof(stbtt_pack_range) * pl_sb_size(font.config.sbRanges));
 
     // find max codepoint & set range pointers into font char data
     int k = 0;
@@ -1023,7 +1011,9 @@ pl__read_file(const char* file)
 static uint32_t
 pl__decompress_length(const unsigned char* ptrInput)
 {
-    return (ptrInput[8] << 24) + (ptrInput[9] << 16) + (ptrInput[10] << 8) + ptrInput[11];
+    if(ptrInput)
+        return (ptrInput[8] << 24) + (ptrInput[9] << 16) + (ptrInput[10] << 8) + ptrInput[11];
+    return 0u;
 }
 
 static uint32_t

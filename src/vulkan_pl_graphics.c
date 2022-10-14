@@ -529,7 +529,7 @@ pl_create_swapchain(plVulkanDevice* device, VkSurfaceKHR surface, uint32_t width
             vkDestroyImageView(device->logicalDevice, swapchainOut->imageViews[i], NULL);
             vkDestroyFramebuffer(device->logicalDevice, swapchainOut->frameBuffers[i], NULL);
         }
-        vkDestroySwapchainKHR(device->logicalDevice, oldSwapChain, NULL);
+        vkDestroySwapchainKHR(device->logicalDevice, oldSwapChain, NULL); //-V1004
     }
 
     vkGetSwapchainImagesKHR(device->logicalDevice, swapchainOut->swapChain, &swapchainOut->imageCount, NULL);

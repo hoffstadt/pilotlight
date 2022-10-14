@@ -45,8 +45,7 @@ pl_app_load(plAppData* appData, plUserData* userData)
     if(userData)
         return userData;
     plUserData* newUserData = malloc(sizeof(plUserData));
-    if(newUserData)
-        memset(newUserData, 0, sizeof(plUserData));
+    memset(newUserData, 0, sizeof(plUserData));
     return newUserData;
 }
 
