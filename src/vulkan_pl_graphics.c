@@ -559,7 +559,7 @@ pl_create_swapchain(plVulkanDevice* device, VkSurfaceKHR surface, uint32_t width
         viewInfo.subresourceRange.layerCount = 1;
         viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         PL_VULKAN(vkCreateImageView(device->logicalDevice, &viewInfo, NULL, &swapchainOut->imageViews[i]));   
-    }  //-V1004
+    }  //-V1020
 }
 
 void
