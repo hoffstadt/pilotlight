@@ -1120,6 +1120,8 @@ pl__adler32(uint32_t uAdler32, unsigned char* ptrBuf, uint32_t uBufLen)
 static uint32_t 
 pl__decompress(unsigned char* ptrOut, const unsigned char* ptrI, uint32_t length)
 {
+    if(ptrI == NULL)
+        return 0u;
     if (MV_IN4_(0) != 0x57bC0000) 
         return 0u;
     if (MV_IN4_(4) != 0)
