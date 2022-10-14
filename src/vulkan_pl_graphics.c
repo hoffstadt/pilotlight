@@ -249,8 +249,8 @@ pl_create_instance_ex(plVulkanGraphics* graphics, uint32_t version, uint32_t lay
     // cleanup
     if(availableLayers)     free(availableLayers);
     if(availableExtensions) free(availableExtensions);
-    if(sbMissingLayers)     pl_sb_free(sbMissingLayers);
-    if(sbMissingExtensions) pl_sb_free(sbMissingExtensions);
+    pl_sb_free(sbMissingLayers);
+    pl_sb_free(sbMissingExtensions);
 
     if(validationEnabled)
     {

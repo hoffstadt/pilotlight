@@ -6,6 +6,7 @@ on:
     branches:
       - master
       - feature/*
+      - dev/*
 
   pull_request:
   workflow_dispatch:
@@ -57,7 +58,7 @@ jobs:
           test -f ./out/pilot_light || exit 1
       - name: Archive Results
         if: ${{ always() }}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: pvs-results
           path: /home/runner/work/pilotlight/pilotlight/pvs-studio.html

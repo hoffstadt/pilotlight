@@ -56,6 +56,7 @@ VkDescriptorSet pl_add_texture(plDrawContext* drawContext, VkImageView imageView
 //-----------------------------------------------------------------------------
 
 #include <string.h> // memset
+#include "pl_ds.h"
 
 //-----------------------------------------------------------------------------
 // [SECTION] shaders
