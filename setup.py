@@ -46,7 +46,8 @@ if(platform.system() == "Windows"):
             ],
             "defines": [
                 "_DEBUG",
-                "VULKAN_PL_DRAWING_IMPLEMENTATION"
+                "VULKAN_PL_DRAWING_IMPLEMENTATION",
+                "PL_MEMORY_IMPLEMENTATION"
             ],
             "windowsSdkVersion": "10.0.19041.0",
             "cStandard": "c99",
@@ -96,7 +97,8 @@ elif(platform.system() == "Darwin"):
             "defines": [
                 "_DEBUG",
                 "METAL_PL_DRAWING_IMPLEMENTATION",
-                "VULKAN_PL_DRAWING_IMPLEMENTATION"
+                "VULKAN_PL_DRAWING_IMPLEMENTATION",
+                "PL_MEMORY_IMPLEMENTATION"
             ],
             "cStandard": "c99",
             "intelliSenseMode": "macos-clang-arm64"
@@ -144,7 +146,8 @@ elif(platform.system() == "Linux"):
             ],
             "defines": [
                 "_DEBUG",
-                "VULKAN_PL_DRAWING_IMPLEMENTATION"
+                "VULKAN_PL_DRAWING_IMPLEMENTATION",
+                "PL_MEMORY_IMPLEMENTATION"
             ],
             "cStandard": "c99",
             "intelliSenseMode": "linux-gcc-x64"
