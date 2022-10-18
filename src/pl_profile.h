@@ -17,7 +17,6 @@ Index of this file:
 // [SECTION] defines
 // [SECTION] forward declarations & basic types
 // [SECTION] public api
-// [SECTION] enums
 // [SECTION] structs
 // [SECTION] internal api
 // [SECTION] implementation
@@ -53,9 +52,28 @@ PL_DECLARE_STRUCT(plProfileContext);
 // [SECTION] public api
 //-----------------------------------------------------------------------------
 
-//-----------------------------------------------------------------------------
-// [SECTION] enums
-//-----------------------------------------------------------------------------
+#ifdef PL_PROFILE_ON
+
+// setup/shutdown
+#define pl_create_profile_context(tPContext) pl__create_profile_context(tPContext)
+#define pl_cleanup_profile_context(tPContext) pl__cleanup_profile_context(tPContext)
+
+// frames
+#define pl_begin_profile_frame(tPContext, ulFrame) pl__begin_profile_frame(tPContext, ulFrame)
+#define pl_end_profile_frame(tPContext) pl__end_profile_frame(tPContext)
+
+// samples
+#define pl_begin_profile_sample(tPContext, cPName) pl__begin_profile_sample(tPContext, cPName)
+#define pl_end_profile_sample(tPContext) pl__end_profile_sample(tPContext)
+
+#else
+#define pl_create_profile_context(tPContext) //
+#define pl_cleanup_profile_context(tPContext) //
+#define pl_begin_profile_frame(tPContext, ulFrame) //
+#define pl_end_profile_frame(tPContext) //
+#define pl_begin_profile_sample(tPContext, cPName) //
+#define pl_end_profile_sample(tPContext) //
+#endif // PL_PROFILE_ON
 
 //-----------------------------------------------------------------------------
 // [SECTION] structs
@@ -107,6 +125,10 @@ void pl__end_profile_sample  (plProfileContext* tPContext);
 
 #endif // PL_PROFILE_H
 
+//-----------------------------------------------------------------------------
+// [SECTION] implementation
+//-----------------------------------------------------------------------------
+
 #ifdef PL_PROFILE_IMPLEMENTATION
 
 #ifdef _WIN32
@@ -142,10 +164,10 @@ void pl__end_profile_sample  (plProfileContext* tPContext);
 #define NOMCX               // - Modem Configuration Extensions
 #include <windows.h>
 #elif defined(__APPLE__)
-#include <time.h>
+#include <time.h> // clock_gettime_nsec_np
 #else // linux
 #define __USE_POSIX199309
-#include <time.h>         // nanosleep
+#include <time.h> // clock_gettime, clock_getres
 #undef __USE_POSIX199309
 #endif
 #include "pl_ds.h"
@@ -173,7 +195,6 @@ pl__get_wall_clock(plProfileContext* tPContext)
         PL_ASSERT(false && "clock_gettime() failed");
     }
     uint64_t nsec_count = ts.tv_nsec + ts.tv_sec * 1e9;
-    // return (double)nsec_count / 1e9;
     return (double)nsec_count / *(double*)tPContext->pInternal;
     #endif
 }

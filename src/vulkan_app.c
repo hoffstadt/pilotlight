@@ -37,6 +37,7 @@ typedef struct plUserData_t
     plDrawLayer*     bgDrawLayer;
     plFontAtlas      fontAtlas;
     plProfileContext tProfileCtx;
+    plLogContext     tLogCtx;
 } plUserData;
 
 //-----------------------------------------------------------------------------
@@ -63,6 +64,11 @@ pl_app_setup(plAppData* appData, plUserData* userData)
 
     // setup profiling context
     pl__create_profile_context(&userData->tProfileCtx);
+
+    // setup logging
+    pl_create_log_context(&userData->tLogCtx);
+    pl_add_log_channel(&userData->tLogCtx, "Default", PL_CHANNEL_TYPE_CONSOLE);
+    pl_log_info(&userData->tLogCtx, 0, "Setup logging");
 
     // create render pass
     VkAttachmentDescription colorAttachment = {
@@ -147,6 +153,9 @@ pl_app_shutdown(plAppData* appData, plUserData* userData)
 
     // cleanup profiling context
     pl__cleanup_profile_context(&userData->tProfileCtx);
+
+    // cleanup logging context
+    pl_cleanup_log_context(&userData->tLogCtx);
 }
 
 //-----------------------------------------------------------------------------
