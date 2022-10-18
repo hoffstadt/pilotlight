@@ -86,6 +86,7 @@ typedef struct plProfileContext_t
     plProfileFrame  tPFrames[2];
     plProfileFrame* tPCurrentFrame;
     plProfileFrame* tPLastFrame;
+    void*           pInternal;
 } plProfileContext;
 
 //-----------------------------------------------------------------------------
@@ -109,6 +110,37 @@ void pl__end_profile_sample  (plProfileContext* tPContext);
 #ifdef PL_PROFILE_IMPLEMENTATION
 
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NORPC
+#define NOPROXYSTUB
+#define NOIMAGE
+#define NOTAPE
+#define NOGDICAPMASKS       // - CC_*, LC_*, PC_*, CP_*, TC_*, RC_
+#define NOSYSMETRICS        // - SM_*
+#define NOMENUS             // - MF_*
+#define NOICONS             // - IDI_*
+#define NOSYSCOMMANDS       // - SC_*
+#define NORASTEROPS         // - Binary and Tertiary raster ops
+#define OEMRESOURCE         // - OEM Resource values
+#define NOATOM              // - Atom Manager routines
+#define NOCLIPBOARD         // - Clipboard routines
+#define NOCOLOR             // - Screen colors
+#define NODRAWTEXT          // - DrawText() and DT_*
+#define NOMEMMGR            // - GMEM_*, LMEM_*, GHND, LHND, associated routines
+#define NOMETAFILE          // - typedef METAFILEPICT
+#define NOMINMAX            // - Macros min(a,b) and max(a,b)
+#define NOOPENFILE          // - OpenFile(), OemToAnsi, AnsiToOem, and OF_*
+#define NOSCROLL            // - SB_* and scrolling routines
+#define NOSERVICE           // - All Service Controller routines, SERVICE_ equates, etc.
+#define NOSOUND             // - Sound driver routines
+#define NOTEXTMETRIC        // - typedef TEXTMETRIC and associated routines
+#define NOCOMM              // - COMM driver routines
+#define NOKANJI             // - Kanji support stuff.
+#define NOHELP              // - Help engine interface.
+#define NOPROFILER          // - Profiler interface.
+#define NODEFERWINDOWPOS    // - DeferWindowPos routines
+#define NOMCX               // - Modem Configuration Extensions
+#include <windows.h>
 #elif defined(__APPLE__)
 #include <time.h>
 #else // linux
@@ -122,9 +154,13 @@ void pl__end_profile_sample  (plProfileContext* tPContext);
 
 
 static inline double
-pl__get_wall_clock()
+pl__get_wall_clock(plProfileContext* tPContext)
 {
     #ifdef _WIN32
+    INT64 slPerfFrequency = *(INT64*)tPContext->pInternal;
+    INT64 slPerfCounter;
+    QueryPerformanceCounter((LARGE_INTEGER*)&slPerfCounter);
+    return(double)slPerfCounter / (double)slPerfFrequency;
     #elif defined(__APPLE__)
     return ((double)(clock_gettime_nsec_np(CLOCK_UPTIME_RAW)) / 1e9);
     #else // linux
@@ -134,7 +170,14 @@ pl__get_wall_clock()
 void
 pl__create_profile_context(plProfileContext* tPContext)
 {
-    tPContext->dStartTime = ((double)(clock_gettime_nsec_np(CLOCK_UPTIME_RAW)) / 1e9);
+
+    #ifdef _WIN32
+    static INT64 slPerfFrequency = 0;
+    PL_ASSERT(QueryPerformanceFrequency((LARGE_INTEGER*)&slPerfFrequency));
+    tPContext->pInternal = &slPerfFrequency;
+    #endif
+
+    tPContext->dStartTime = pl__get_wall_clock(tPContext);
     tPContext->sbFrames = NULL;
     tPContext->tPCurrentFrame = &tPContext->tPFrames[0];
 }
@@ -154,45 +197,45 @@ pl__begin_profile_frame(plProfileContext* tPContext, uint64_t ulFrame)
     tPContext->tPCurrentFrame->ulFrame = ulFrame;
     tPContext->tPCurrentFrame->dDuration = 0.0;
     tPContext->tPCurrentFrame->dInternalDuration = 0.0;
-    tPContext->tPCurrentFrame->dStartTime = pl__get_wall_clock();
+    tPContext->tPCurrentFrame->dStartTime = pl__get_wall_clock(tPContext);
     pl_sb_reset(tPContext->tPCurrentFrame->sbSamples);
 }
 
 void
 pl__end_profile_frame(plProfileContext* tPContext)
 {
-    tPContext->tPCurrentFrame->dDuration = pl__get_wall_clock() - tPContext->tPCurrentFrame->dStartTime;
+    tPContext->tPCurrentFrame->dDuration = pl__get_wall_clock(tPContext) - tPContext->tPCurrentFrame->dStartTime;
 }
 
 void
 pl__begin_profile_sample(plProfileContext* tPContext, const char* cPName)
 {
-    const double dCurrentInternalTime = pl__get_wall_clock();
+    const double dCurrentInternalTime = pl__get_wall_clock(tPContext);
     plProfileFrame* tPCurrentFrame = tPContext->tPCurrentFrame;
 
     plProfileSample tSample = {
         .cPName = cPName,
         .dDuration = 0.0,
-        .dStartTime = pl__get_wall_clock(),
+        .dStartTime = pl__get_wall_clock(tPContext),
         .uDepth = pl_sb_size(tPCurrentFrame->sbSampleStack),
     };
 
     uint32_t uSampleIndex = pl_sb_size(tPCurrentFrame->sbSamples);
     pl_sb_push(tPCurrentFrame->sbSampleStack, uSampleIndex);
     pl_sb_push(tPCurrentFrame->sbSamples, tSample);
-    tPCurrentFrame->dInternalDuration += pl__get_wall_clock() - dCurrentInternalTime;
+    tPCurrentFrame->dInternalDuration += pl__get_wall_clock(tPContext) - dCurrentInternalTime;
 }
 
 void
 pl__end_profile_sample(plProfileContext* tPContext)
 {
-    const double dCurrentInternalTime = pl__get_wall_clock();
+    const double dCurrentInternalTime = pl__get_wall_clock(tPContext);
     plProfileFrame* tPCurrentFrame = tPContext->tPCurrentFrame;
     plProfileSample* tPLastSample = &tPCurrentFrame->sbSamples[pl_sb_pop(tPCurrentFrame->sbSampleStack)];
     PL_ASSERT(tPLastSample && "Begin/end profile sampel mismatch");
-    tPLastSample->dDuration = pl__get_wall_clock() - tPLastSample->dStartTime;
+    tPLastSample->dDuration = pl__get_wall_clock(tPContext) - tPLastSample->dStartTime;
     tPLastSample->dStartTime -= tPCurrentFrame->dStartTime;
-    tPCurrentFrame->dInternalDuration += pl__get_wall_clock() - dCurrentInternalTime;
+    tPCurrentFrame->dInternalDuration += pl__get_wall_clock(tPContext) - dCurrentInternalTime;
 }
 
 #endif // PL_PROFILE_IMPLEMENTATION
