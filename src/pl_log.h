@@ -13,7 +13,7 @@
 
 /*
 Index of this file:
-// [SECTION] include
+// [SECTION] includes
 // [SECTION] defines
 // [SECTION] forward declarations & basic types
 // [SECTION] public api
