@@ -144,6 +144,9 @@ void pl__end_profile_sample  (plProfileContext* tPContext);
 #elif defined(__APPLE__)
 #include <time.h>
 #else // linux
+#define __USE_POSIX199309
+#include <time.h>         // nanosleep
+#undef __USE_POSIX199309
 #endif
 #include "pl_ds.h"
 
@@ -164,6 +167,14 @@ pl__get_wall_clock(plProfileContext* tPContext)
     #elif defined(__APPLE__)
     return ((double)(clock_gettime_nsec_np(CLOCK_UPTIME_RAW)) / 1e9);
     #else // linux
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) 
+    {
+        PL_ASSERT(false && "clock_gettime() failed");
+    }
+    uint64_t nsec_count = ts.tv_nsec + ts.tv_sec * 1e9;
+    // return (double)nsec_count / 1e9;
+    return (double)nsec_count / *(double*)tPContext->pInternal;
     #endif
 }
 
@@ -175,6 +186,17 @@ pl__create_profile_context(plProfileContext* tPContext)
     static INT64 slPerfFrequency = 0;
     PL_ASSERT(QueryPerformanceFrequency((LARGE_INTEGER*)&slPerfFrequency));
     tPContext->pInternal = &slPerfFrequency;
+    #elif defined(__APPLE__)
+    #else // linux
+    static struct timespec ts;
+    if (clock_getres(CLOCK_MONOTONIC, &ts) != 0) 
+    {
+        PL_ASSERT(false && "clock_getres() failed");
+    }
+
+    static double dPerFrequency = 0.0;
+    dPerFrequency = 1e9/((double)ts.tv_nsec + (double)ts.tv_sec * (double)1e9);
+    tPContext->pInternal = &dPerFrequency;
     #endif
 
     tPContext->dStartTime = pl__get_wall_clock(tPContext);
