@@ -10,7 +10,7 @@ Index of this file:
 // [SECTION] entry point
 // [SECTION] key code conversion
 // [SECTION] windows procedure
-// [SECTION] misc
+// [SECTION] implementations
 */
 
 //-----------------------------------------------------------------------------
@@ -34,6 +34,7 @@ typedef struct HWND__ *HWND;
 
 static LRESULT CALLBACK pl__windows_procedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 static void             pl__convert_to_wide_string(const char* narrowValue, wchar_t* wideValue);
+static void             pl__render_frame(void);
 
 //-----------------------------------------------------------------------------
 // [SECTION] globals
@@ -45,6 +46,8 @@ static bool              gMouseTracked = false;
 static plSharedLibrary   gSharedLibrary = {0};
 static void*             gUserData = NULL;
 static plAppData         gAppData = { .running = true, .clientWidth = 500, .clientHeight = 500};
+static INT64             gTime;
+static INT64             gTicksPerSecond;
 
 typedef struct plUserData_t plUserData;
 static void* (*pl_app_load)(plAppData* appData, plUserData* userData);
@@ -62,6 +65,11 @@ int main()
 
     // setup io context
     pl_initialize_io_context(&gAppData.tIOContext);
+
+    if (!QueryPerformanceFrequency((LARGE_INTEGER*)&gTicksPerSecond))
+        return -1;
+    if (!QueryPerformanceCounter((LARGE_INTEGER*)&gTime))
+        return -1;
 
     // load library
     if(pl_load_library(&gSharedLibrary, "app.dll", "app_", "lock.tmp"))
@@ -177,7 +185,7 @@ int main()
 
         // render a frame
         if(gAppData.running)
-            pl_app_render(&gAppData, gUserData);
+            pl__render_frame();
     }
 
     // app cleanup
@@ -373,13 +381,13 @@ pl__windows_procedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         case WM_MOVE:
         case WM_MOVING:
         {
-            pl_app_render(&gAppData, gUserData);
+            pl__render_frame();
             break;
         }
 
         case WM_PAINT:
         {
-            pl_app_render(&gAppData, gUserData);
+            pl__render_frame();
 
             // must be called for the OS to do its thing
             PAINTSTRUCT Paint;
@@ -414,7 +422,7 @@ pl__windows_procedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         case WM_TIMER:
         {
             if(wparam == puIDEvent)
-                pl_app_render(&gAppData, gUserData);
+                pl__render_frame();
             break;
         }
 
@@ -469,56 +477,68 @@ pl__windows_procedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             break;
         }
 
-    case WM_KEYDOWN:
-    case WM_KEYUP:
-    case WM_SYSKEYDOWN:
-    case WM_SYSKEYUP:
-    {
-        const bool bKeyDown = (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN);
-        if (wparam < 256)
+        case WM_MOUSEWHEEL:
         {
-
-            // Submit modifiers
-            pl_add_key_event(PL_KEY_MOD_CTRL,  pl__is_vk_down(VK_CONTROL));
-            pl_add_key_event(PL_KEY_MOD_SHIFT, pl__is_vk_down(VK_SHIFT));
-            pl_add_key_event(PL_KEY_MOD_ALT,   pl__is_vk_down(VK_MENU));
-            pl_add_key_event(PL_KEY_MOD_SUPER, pl__is_vk_down(VK_APPS));
-
-            // obtain virtual key code
-            int iVk = (int)wparam;
-            if ((wparam == VK_RETURN) && (HIWORD(lparam) & KF_EXTENDED))
-            {
-                iVk = PL_VK_KEYPAD_ENTER;
-            }
-
-            // submit key event
-            const plKey key = pl__virtual_key_to_pl_key(iVk);
-
-            if (key != PL_KEY_NONE)
-            {
-                pl_add_key_event(key, bKeyDown);
-            }
-
-            // Submit individual left/right modifier events
-            if (iVk == VK_SHIFT)
-            {
-                if (pl__is_vk_down(VK_LSHIFT) == bKeyDown) pl_add_key_event(PL_KEY_LEFT_SHIFT, bKeyDown);
-                if (pl__is_vk_down(VK_RSHIFT) == bKeyDown) pl_add_key_event(PL_KEY_RIGHT_SHIFT, bKeyDown);
-            }
-            else if (iVk == VK_CONTROL)
-            {
-                if (pl__is_vk_down(VK_LCONTROL) == bKeyDown) pl_add_key_event(PL_KEY_LEFT_CTRL, bKeyDown);
-                if (pl__is_vk_down(VK_RCONTROL) == bKeyDown) pl_add_key_event(PL_KEY_RIGHT_CTRL, bKeyDown);
-            }
-            else if (iVk == VK_MENU)
-            {
-                if (pl__is_vk_down(VK_LMENU) == bKeyDown) pl_add_key_event(PL_KEY_LEFT_ALT, bKeyDown);
-                if (pl__is_vk_down(VK_RMENU) == bKeyDown) pl_add_key_event(PL_KEY_RIGHT_ALT, bKeyDown);
-            }
-            result = 0;
-            break;
+            pl_add_mouse_wheel_event(0.0f, (float)GET_WHEEL_DELTA_WPARAM(wparam) / (float)WHEEL_DELTA);
+            return 0;
         }
-    }
+
+        case WM_MOUSEHWHEEL:
+        {
+            pl_add_mouse_wheel_event((float)GET_WHEEL_DELTA_WPARAM(wparam) / (float)WHEEL_DELTA, 0.0f);
+            return 0;
+        }
+
+        case WM_KEYDOWN:
+        case WM_KEYUP:
+        case WM_SYSKEYDOWN:
+        case WM_SYSKEYUP:
+        {
+            const bool bKeyDown = (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN);
+            if (wparam < 256)
+            {
+
+                // Submit modifiers
+                pl_add_key_event(PL_KEY_MOD_CTRL,  pl__is_vk_down(VK_CONTROL));
+                pl_add_key_event(PL_KEY_MOD_SHIFT, pl__is_vk_down(VK_SHIFT));
+                pl_add_key_event(PL_KEY_MOD_ALT,   pl__is_vk_down(VK_MENU));
+                pl_add_key_event(PL_KEY_MOD_SUPER, pl__is_vk_down(VK_APPS));
+
+                // obtain virtual key code
+                int iVk = (int)wparam;
+                if ((wparam == VK_RETURN) && (HIWORD(lparam) & KF_EXTENDED))
+                {
+                    iVk = PL_VK_KEYPAD_ENTER;
+                }
+
+                // submit key event
+                const plKey key = pl__virtual_key_to_pl_key(iVk);
+
+                if (key != PL_KEY_NONE)
+                {
+                    pl_add_key_event(key, bKeyDown);
+                }
+
+                // Submit individual left/right modifier events
+                if (iVk == VK_SHIFT)
+                {
+                    if (pl__is_vk_down(VK_LSHIFT) == bKeyDown) pl_add_key_event(PL_KEY_LEFT_SHIFT, bKeyDown);
+                    if (pl__is_vk_down(VK_RSHIFT) == bKeyDown) pl_add_key_event(PL_KEY_RIGHT_SHIFT, bKeyDown);
+                }
+                else if (iVk == VK_CONTROL)
+                {
+                    if (pl__is_vk_down(VK_LCONTROL) == bKeyDown) pl_add_key_event(PL_KEY_LEFT_CTRL, bKeyDown);
+                    if (pl__is_vk_down(VK_RCONTROL) == bKeyDown) pl_add_key_event(PL_KEY_RIGHT_CTRL, bKeyDown);
+                }
+                else if (iVk == VK_MENU)
+                {
+                    if (pl__is_vk_down(VK_LMENU) == bKeyDown) pl_add_key_event(PL_KEY_LEFT_ALT, bKeyDown);
+                    if (pl__is_vk_down(VK_RMENU) == bKeyDown) pl_add_key_event(PL_KEY_RIGHT_ALT, bKeyDown);
+                }
+                result = 0;
+                break;
+            }
+        }
 
         default:
             result = DefWindowProcW(hwnd, msg, wparam, lparam);
@@ -537,4 +557,16 @@ pl__convert_to_wide_string(const char* narrowValue, wchar_t* wideValue)
     memset(&state, 0, sizeof(state));
     size_t len = 1 + mbsrtowcs(NULL, &narrowValue, 0, &state);
     mbsrtowcs(wideValue, &narrowValue, len, &state);
+}
+
+static void
+pl__render_frame(void)
+{
+    // setup time step
+    INT64 currentTime = 0;
+    QueryPerformanceCounter((LARGE_INTEGER*)&currentTime);
+    pl_get_io_context()->fDeltaTime = (float)(currentTime - gTime) / gTicksPerSecond;
+    gTime = currentTime;
+    
+    pl_app_render(&gAppData, gUserData);   
 }
