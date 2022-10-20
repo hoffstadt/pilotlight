@@ -27,6 +27,7 @@ Index of this file:
 #include <xkbcommon/xkbcommon-names.h>
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include <xkbcommon/xkbcommon-compat.h>
+#include <time.h> // clock_gettime, clock_getres
 
 //-----------------------------------------------------------------------------
 // [SECTION] globals
@@ -42,6 +43,8 @@ static xcb_atom_t        gWmDeleteWin;
 static plSharedLibrary   gSharedLibrary = {0};
 static void*             gUserData = NULL;
 static plAppData         gAppData = { .running = true, .clientWidth = 500, .clientHeight = 500};
+static double            gdTime = 0.0;
+static double            gdFrequency = 0.0;
 
 typedef struct plUserData_t plUserData;
 static void* (*pl_app_load)(plAppData* appData, plUserData* userData);
@@ -55,6 +58,16 @@ static void  (*pl_app_render)(plAppData* appData, plUserData* userData);
 //-----------------------------------------------------------------------------
 
 static plKey pl__xcb_key_to_pl_key(uint32_t x_keycode);
+static inline double pl__get_linux_absolute_time(void)
+{
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) 
+    {
+        PL_ASSERT(false && "clock_gettime() failed");
+    }
+    uint64_t nsec_count = ts.tv_nsec + ts.tv_sec * 1e9;
+    return (double)nsec_count / gdFrequency;    
+}
 
 //-----------------------------------------------------------------------------
 // [SECTION] entry point
@@ -65,6 +78,14 @@ int main()
 
     // setup io context
     pl_initialize_io_context(&gAppData.tIOContext);
+
+    static struct timespec ts;
+    if (clock_getres(CLOCK_MONOTONIC, &ts) != 0) 
+    {
+        PL_ASSERT(false && "clock_getres() failed");
+    }
+    gdFrequency = 1e9/((double)ts.tv_nsec + (double)ts.tv_sec * (double)1e9);
+    gdTime = pl__get_linux_absolute_time();
 
     // load library
     if(pl_load_library(&gSharedLibrary, "./app.so", "./app_", "./lock.tmp"))
@@ -249,6 +270,8 @@ int main()
                         case XCB_BUTTON_INDEX_1: pl_add_mouse_button_event(PL_MOUSE_BUTTON_LEFT, true);   break;
                         case XCB_BUTTON_INDEX_2: pl_add_mouse_button_event(PL_MOUSE_BUTTON_MIDDLE, true); break;
                         case XCB_BUTTON_INDEX_3: pl_add_mouse_button_event(PL_MOUSE_BUTTON_RIGHT, true);  break;
+                        case XCB_BUTTON_INDEX_4: pl_add_mouse_wheel_event (1.0f, 0.0f);                   break;
+                        case XCB_BUTTON_INDEX_5: pl_add_mouse_wheel_event (-1.0f, 0.0f);                  break;
                         default:                 pl_add_mouse_button_event(press->detail, true);          break;
                     }
                     break;
@@ -327,6 +350,11 @@ int main()
         }
 
         // render a frame
+
+        double dCurrentTime = pl__get_linux_absolute_time();
+        pl_get_io_context()->fDeltaTime = (float)(dCurrentTime - gdTime);
+        gdTime = dCurrentTime;
+
         pl_app_render(&gAppData, gUserData);
     }
 
