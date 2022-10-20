@@ -61,6 +61,7 @@ pl_app_load(plAppData* appData, plUserData* userData)
     pl_set_log_context(&tPNewData->tLogCtx);
     pl_set_profile_context(&tPNewData->tProfileCtx);
     pl_set_memory_context(&tPNewData->tMemoryCtx);
+    pl_set_io_context(&appData->tIOContext);
     return tPNewData;
 }
 
