@@ -63,7 +63,7 @@ static plKey pl__xcb_key_to_pl_key(uint32_t x_keycode);
 int main()
 {
 
-    // setup io contextu
+    // setup io context
     pl_initialize_io_context(&gAppData.tIOContext);
 
     // load library
@@ -339,6 +339,9 @@ int main()
     // platform cleanup
     XAutoRepeatOn(gDisplay);
     xcb_destroy_window(gConnection, gWindow);
+
+    // cleanup io context
+    pl_cleanup_io_context();
 }
 
 //-----------------------------------------------------------------------------

@@ -60,7 +60,7 @@ static void  (*pl_app_render)(plAppData* appData, plUserData* userData);
 int main()
 {
 
-    // setup io contextu
+    // setup io context
     pl_initialize_io_context(&gAppData.tIOContext);
 
     // load library

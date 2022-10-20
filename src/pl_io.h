@@ -81,7 +81,7 @@ void         pl_add_mouse_wheel_event (float fX, float fY);
 
 typedef struct plIOContext_t
 {
-    int iUnused;
+    float fDeltaTime;
 } plIOContext;
 
 //-----------------------------------------------------------------------------
