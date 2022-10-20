@@ -7,6 +7,7 @@ on:
       - master
       - feature/*
       - dev/*
+      - fix/*
 
   pull_request:
   workflow_dispatch:
