@@ -58,9 +58,9 @@ pl_app_load(plAppData* appData, plUserData* userData)
         memset(tPNewData, 0, sizeof(plUserData));
     }
 
-    pl_set_log_context(&userData->tLogCtx);
-    pl_set_profile_context(&userData->tProfileCtx);
-    pl_set_memory_context(&userData->tMemoryCtx);
+    pl_set_log_context(&tPNewData->tLogCtx);
+    pl_set_profile_context(&tPNewData->tProfileCtx);
+    pl_set_memory_context(&tPNewData->tMemoryCtx);
     return tPNewData;
 }
 
