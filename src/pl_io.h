@@ -51,6 +51,7 @@ PL_DECLARE_STRUCT(plIOContext);
 
 // enums
 typedef int plKey;
+typedef int plMouseButton;
 
 //-----------------------------------------------------------------------------
 // [SECTION] global context
@@ -86,6 +87,14 @@ typedef struct plIOContext_t
 //-----------------------------------------------------------------------------
 // [SECTION] enums
 //-----------------------------------------------------------------------------
+
+enum plMouseButton_
+{
+    PL_MOUSE_BUTTON_LEFT   = 0,
+    PL_MOUSE_BUTTON_RIGHT  = 1,
+    PL_MOUSE_BUTTON_MIDDLE = 2,
+    PL_MOUSE_BUTTON_COUNT  = 5    
+};
 
 enum plKey_
 {
