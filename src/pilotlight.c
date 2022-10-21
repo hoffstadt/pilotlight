@@ -1,3 +1,5 @@
+#include "pl.h"
+
 #include "pl_drawing.c"
 
 #define PL_MEMORY_IMPLEMENTATION
@@ -18,11 +20,11 @@
 
 // platform specifics
 #ifdef _WIN32
-#include "win32_pl_os.c"
+#include "pl_os_win32.c"
 #elif defined(__APPLE__)
-#include "apple_pl_os.m"
+#include "pl_os_apple.m"
 #else // linux
-#include "linux_pl_os.c"
+#include "pl_os_linux.c"
 #endif
 
 #ifdef PL_USE_STB_SPRINTF
@@ -39,10 +41,10 @@
 
 // graphics backend specifics
 #ifdef PL_VULKAN_BACKEND
-#include "vulkan_pl_graphics.c"
-#define VULKAN_PL_DRAWING_IMPLEMENTATION
-#include "vulkan_pl_drawing.h"
-#undef VULKAN_PL_DRAWING_IMPLEMENTATION
+#include "pl_graphics_vulkan.c"
+#define PL_DRAWING_VULKAN_IMPLEMENTATION
+#include "pl_drawing_vulkan.h"
+#undef PL_DRAWING_VULKAN_IMPLEMENTATION
 #endif
 
 #define STB_RECT_PACK_IMPLEMENTATION

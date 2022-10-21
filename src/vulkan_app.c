@@ -18,13 +18,13 @@ Index of this file:
 //-----------------------------------------------------------------------------
 
 #include "pl.h"
-#include "vulkan_pl_graphics.h"
+#include "pl_graphics_vulkan.h"
 #include "pl_profile.h"
 #include "pl_log.h"
 #include "pl_ds.h"
 #include "pl_io.h"
 #include "pl_memory.h"
-#include "vulkan_pl_drawing.h"
+#include "pl_drawing_vulkan.h"
 #include <string.h> // memset
 
 //-----------------------------------------------------------------------------
@@ -95,7 +95,17 @@ pl_app_setup(plAppData* ptAppData)
             .hwnd = *(HWND*)ptIOCtx->pBackendPlatformData
         };
         PL_VULKAN(vkCreateWin32SurfaceKHR(ptAppData->graphics.instance, &surfaceCreateInfo, NULL, &ptAppData->graphics.surface));
-    #else
+    #else // linux
+        struct tPlatformData { xcb_connection_t* ptConnection; xcb_window_t tWindow;};
+        struct tPlatformData* ptPlatformData = (struct tPlatformData*)ptIOCtx->pBackendPlatformData;
+        VkXcbSurfaceCreateInfoKHR surfaceCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
+            .pNext = NULL,
+            .flags = 0,
+            .window = ptPlatformData->tWindow,
+            .connection = ptPlatformData->ptConnection
+        };
+        PL_VULKAN(vkCreateXcbSurfaceKHR(ptAppData->graphics.instance, &surfaceCreateInfo, NULL, &ptAppData->graphics.surface));
     #endif
 
     // create devices

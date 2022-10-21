@@ -15,8 +15,8 @@ Index of this file:
 // [SECTION] internal helpers implementation
 */
 
-#ifndef VULKAN_PL_DRAWING_H
-#define VULKAN_PL_DRAWING_H
+#ifndef PL_DRAWING_VULKAN_H
+#define PL_DRAWING_VULKAN_H
 
 //-----------------------------------------------------------------------------
 // [SECTION] includes
@@ -43,13 +43,13 @@ void           pl_new_draw_frame            (plDrawContext* ctx);
 // misc
 VkDescriptorSet pl_add_texture(plDrawContext* drawContext, VkImageView imageView, VkImageLayout imageLayout);
 
-#endif // VULKAN_PL_DRAWING_H
+#endif // PL_DRAWING_VULKAN_H
 
 //-----------------------------------------------------------------------------
 // [SECTION] c file
 //-----------------------------------------------------------------------------
 
-#ifdef VULKAN_PL_DRAWING_IMPLEMENTATION
+#ifdef PL_DRAWING_VULKAN_IMPLEMENTATION
 
 //-----------------------------------------------------------------------------
 // [SECTION] includes
@@ -1207,4 +1207,4 @@ pl__grow_vulkan_index_buffer(plDrawList* drawlist, uint32_t indexBufferSize, uin
     PL_VULKAN(vkMapMemory(vulkanDrawCtx->device, vulkanDrawlist->sbIndexMemory[currentFrameIndex], 0, memReqs.size, 0, (void**)&vulkanDrawlist->sbIndexBufferMap[currentFrameIndex]));
 }
 
-#endif // VULKAN_PL_DRAWING_IMPLEMENTATION
+#endif // PL_DRAWING_VULKAN_IMPLEMENTATION

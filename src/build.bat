@@ -196,6 +196,7 @@ cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% -permissive- %PL_SO
 @rem Information Output
 @rem --------------------------------------------------------------------------
 :PrintInfo
+@echo.
 @echo [36m--------------------------------------------------------------------------[0m
 @echo [1m[93m                        Build Information [0m
 @echo [36mResults:             [0m %PL_RESULT%

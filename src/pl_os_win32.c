@@ -117,7 +117,8 @@ pl_load_library(plSharedLibrary* library, const char* name, const char* transiti
     if(library->lockFile[0] == 0)         strncpy(library->lockFile, lockFile, PL_MAX_NAME_LENGTH);
     library->valid = false;
 
-    library->_platformData = malloc(sizeof(plWin32SharedLibrary));
+    if(library->_platformData == NULL)
+        library->_platformData = malloc(sizeof(plWin32SharedLibrary));
     plWin32SharedLibrary* win32Library = library->_platformData;
 
     WIN32_FILE_ATTRIBUTE_DATA Ignored;

@@ -15,7 +15,7 @@ Index of this file:
 // [SECTION] includes
 //-----------------------------------------------------------------------------
 
-#include "vulkan_pl_graphics.h"
+#include "pl_graphics_vulkan.h"
 #include "pl_ds.h"
 #include <stdio.h>
 
