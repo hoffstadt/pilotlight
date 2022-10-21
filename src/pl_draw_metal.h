@@ -15,14 +15,14 @@ Index of this file:
 // [SECTION] MetalContext
 */
 
-#ifndef METAL_PL_DRAWING_H
-#define METAL_PL_DRAWING_H
+#ifndef PL_DRAW_METAL_H
+#define PL_DRAW_METAL_H
 
 //-----------------------------------------------------------------------------
-// [SECTION] includes
+// [SECTION] include
 //-----------------------------------------------------------------------------
 
-#include "pl_drawing.h"
+#include "pl_draw.h"
 #import <Metal/Metal.h>
 
 //-----------------------------------------------------------------------------
@@ -35,13 +35,13 @@ void           pl_new_draw_frame_metal     (plDrawContext* ctx, MTLRenderPassDes
 void           pl_submit_drawlist_metal    (plDrawList* drawlist, float width, float height, id<MTLRenderCommandEncoder> renderEncoder);
 NS_ASSUME_NONNULL_END
 
-#endif // METAL_PL_DRAWING_H
+#endif // PL_DRAW_METAL_H
 
 //-----------------------------------------------------------------------------
 // [SECTION] m file
 //-----------------------------------------------------------------------------
 
-#ifdef METAL_PL_DRAWING_IMPLEMENTATION
+#ifdef PL_DRAW_METAL_IMPLEMENTATION
 
 //-----------------------------------------------------------------------------
 // [SECTION] includes/imports
@@ -614,4 +614,4 @@ pl_cleanup_font_atlas(plFontAtlas* atlas)
 
 NS_ASSUME_NONNULL_END
 
-#endif // METAL_PL_DRAWING_IMPLEMENTATION
+#endif // PL_DRAW_METAL_IMPLEMENTATION

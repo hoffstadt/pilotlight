@@ -41,6 +41,22 @@ ARCH="$(uname -m)"
 
 echo LOCKING > ../out/lock.tmp
 
+# check if hot reloading
+PL_HOT_RELOADING_STATUS=0
+if lsof | grep -i -q pilot_light
+then
+PL_HOT_RELOADING_STATUS=1
+echo
+echo ${BOLD}${WHITE}${RED_BG}--------${GREEN_BG} HOT RELOADING ${RED_BG}--------${NC}
+echo
+else
+PL_HOT_RELOADING_STATUS=0
+if [ -f ../out/pilot_light ]; then
+    rm -f ../out/pilot_light
+    rm -f ../out/*.spv
+fi
+fi
+
 ###############################################################################
 #                           Common Settings                                   #
 ###############################################################################
@@ -110,24 +126,47 @@ elif [[ "$PL_CONFIG" == "Release" ]]; then
 fi
 
 ###############################################################################
+#                            metal shaders                                    #
+###############################################################################
+
+echo
+echo ${YELLOW}Step 0: shaders${NC}
+echo ${YELLOW}~~~~~~~~~~~~~~~${NC}
+echo ${CYAN}Compiling...${NC}
+
+# compile
+# xcrun -sdk macosx metal -c ./shaders/simple.metal -o ../out/simple.air
+
+# link
+# xcrun -sdk macosx metallib ../out/*.air -o ../out/pl.metallib
+
+###############################################################################
 #                             apple pl lib                                    #
 ###############################################################################
 
-PL_SOURCES="pl.c"
+PL_SOURCES="pilotlight.c"
 
-clang -c $PL_SOURCES $PL_DEFINES $PL_COMPILER_FLAGS $PL_INCLUDE_DIRECTORIES -o ../out/pl.o
+echo
+echo ${YELLOW}Step 1: pilotlight.o${NC}
+echo ${YELLOW}~~~~~~~~~~~~~~~~~~~~${NC}
+echo ${CYAN}Compiling...${NC}
+clang -c $PL_SOURCES $PL_DEFINES $PL_COMPILER_FLAGS $PL_INCLUDE_DIRECTORIES -o ../out/pilotlight.o
 
 ###############################################################################
 #                             apple app lib                                   #
 ###############################################################################
 
-PL_SOURCES="metal_app.m ../out/pl.o"
+PL_SOURCES="app_metal.m ../out/pilotlight.o"
 
 if [ -f "../out/app.so" ]
 then
     rm ../out/app.so
 fi
 
+echo
+echo ${YELLOW}Step 2: app.so${NC}
+echo ${YELLOW}~~~~~~~~~~~~~~${NC}
+echo ${CYAN}Compiling...${NC}
 clang -shared -fPIC $PL_SOURCES $PL_DEFINES $PL_COMPILER_FLAGS $PL_INCLUDE_DIRECTORIES $PL_LINK_LIBRARIES -o ../out/app.so
 
 if [ $? -ne 0 ]
@@ -139,9 +178,16 @@ fi
 #                              apple executable                               #
 ###############################################################################
 
-PL_SOURCES="apple_pl.m ../out/pl.o"
+PL_SOURCES="pl_main_macos.m ../out/pilotlight.o"
 
+if [ ${PL_HOT_RELOADING_STATUS} -ne 1 ]
+then
+echo
+echo ${YELLOW}Step 3: pilot_light${NC}
+echo ${YELLOW}~~~~~~~~~~~~~~~~~~~${NC}
+echo ${CYAN}Compiling and Linking...${NC}
 clang $PL_SOURCES $PL_DEFINES $PL_COMPILER_FLAGS $PL_INCLUDE_DIRECTORIES $PL_LINK_LIBRARIES -o ../out/pilot_light
+fi
 
 if [ $? -ne 0 ]
 then
@@ -151,15 +197,7 @@ then
     rm ../out/app_*.so >/dev/null 2>&1
 fi
 
-###############################################################################
-#                            metal shaders                                    #
-###############################################################################
 
-# compile
-# xcrun -sdk macosx metal -c ./shaders/simple.metal -o ../out/simple.air
-
-# link
-# xcrun -sdk macosx metallib ../out/*.air -o ../out/pl.metallib
 
 ###############################################################################
 ###############################################################################
@@ -169,23 +207,6 @@ fi
 ###############################################################################
 ###############################################################################
 else
-
-# check if hot reloading
-PL_HOT_RELOADING_STATUS=0
-if lsof | grep -i -q pilot_light
-then
-PL_HOT_RELOADING_STATUS=1
-echo
-echo ${BOLD}${WHITE}${RED_BG}--------${GREEN_BG} HOT RELOADING ${RED_BG}--------${NC}
-echo
-else
-PL_HOT_RELOADING_STATUS=0
-# cleanup
-if [ -f ../out/pilot_light ]; then
-    rm -f ../out/pilot_light
-    rm -f ../out/*.spv
-fi
-fi
 
 ###############################################################################
 #                           Linux Common Settings                             #
@@ -257,7 +278,7 @@ gcc -c -fPIC $PL_SOURCES $PL_DEFINES $PL_COMPILER_FLAGS $PL_INCLUDE_DIRECTORIES 
 #                             linux app lib                                   #
 ###############################################################################
 
-PL_SOURCES="vulkan_app.c ../out/pilotlight.o"
+PL_SOURCES="app_vulkan.c ../out/pilotlight.o"
 
 if [ -f "../out/app.so" ]
 then

@@ -105,7 +105,7 @@ elif(platform.system() == "Darwin"):
                 "PL_LOG_ON",
                 "PL_PROFILE_ON",
                 "PL_IO_IMPLEMENTATION",
-                "METAL_PL_DRAWING_IMPLEMENTATION",
+                "PL_DRAW_METAL_IMPLEMENTATION",
                 "PL_DRAWING_VULKAN_IMPLEMENTATION"
             ],
             "cStandard": "c99",

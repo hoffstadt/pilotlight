@@ -142,7 +142,7 @@ lib -nologo -OUT:..\out\pilotlight.lib ..\out\*.obj
 @rem |                         app lib                                        |
 @rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-@set PL_SOURCES="vulkan_app.c"
+@set PL_SOURCES="app_vulkan.c"
 
 @rem run compiler
 @echo.

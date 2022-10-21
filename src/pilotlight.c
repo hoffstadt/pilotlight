@@ -1,6 +1,6 @@
-#include "pl.h"
+#include "pilotlight.h"
 
-#include "pl_drawing.c"
+#include "pl_draw.c"
 
 #define PL_MEMORY_IMPLEMENTATION
 #include "pl_memory.h"
@@ -22,7 +22,7 @@
 #ifdef _WIN32
 #include "pl_os_win32.c"
 #elif defined(__APPLE__)
-#include "pl_os_apple.m"
+#include "pl_os_macos.m"
 #else // linux
 #include "pl_os_linux.c"
 #endif
@@ -34,9 +34,9 @@
 #endif
 
 #ifdef PL_METAL_BACKEND
-#define METAL_PL_DRAWING_IMPLEMENTATION
-#include "metal_pl_drawing.h"
-#undef METAL_PL_DRAWING_IMPLEMENTATION
+#define PL_DRAW_METAL_IMPLEMENTATION
+#include "pl_draw_metal.h"
+#undef PL_DRAW_METAL_IMPLEMENTATION
 #endif
 
 // graphics backend specifics
