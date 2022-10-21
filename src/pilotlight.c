@@ -42,9 +42,9 @@
 // graphics backend specifics
 #ifdef PL_VULKAN_BACKEND
 #include "pl_graphics_vulkan.c"
-#define PL_DRAWING_VULKAN_IMPLEMENTATION
-#include "pl_drawing_vulkan.h"
-#undef PL_DRAWING_VULKAN_IMPLEMENTATION
+#define PL_DRAW_VULKAN_IMPLEMENTATION
+#include "pl_draw_vulkan.h"
+#undef PL_DRAW_VULKAN_IMPLEMENTATION
 #endif
 
 #define STB_RECT_PACK_IMPLEMENTATION

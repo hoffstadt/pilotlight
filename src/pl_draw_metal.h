@@ -95,10 +95,10 @@ NS_ASSUME_NONNULL_BEGIN
 // [SECTION] implementation
 //-----------------------------------------------------------------------------
 
-extern void                  pl__cleanup_font_atlas(plFontAtlas* atlas); // in pl_drawing.c
-extern void                  pl__cleanup_draw_context(plDrawContext* ctx); // in pl_drawing.c
-extern void                  pl__new_draw_frame(plDrawContext* ctx); // in pl_drawing.c
-extern void                  pl__build_font_atlas(plFontAtlas* ctx); // in pl_drawing.c
+extern void                  pl__cleanup_font_atlas(plFontAtlas* atlas); // in pl_draw.c
+extern void                  pl__cleanup_draw_context(plDrawContext* ctx); // in pl_draw.c
+extern void                  pl__new_draw_frame(plDrawContext* ctx); // in pl_draw.c
+extern void                  pl__build_font_atlas(plFontAtlas* ctx); // in pl_draw.c
 static inline CFTimeInterval GetMachAbsoluteTimeInSeconds() { return (CFTimeInterval)(double)clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1e9; }
 
 plDrawContext*

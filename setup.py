@@ -106,7 +106,7 @@ elif(platform.system() == "Darwin"):
                 "PL_PROFILE_ON",
                 "PL_IO_IMPLEMENTATION",
                 "PL_DRAW_METAL_IMPLEMENTATION",
-                "PL_DRAWING_VULKAN_IMPLEMENTATION"
+                "PL_DRAW_VULKAN_IMPLEMENTATION"
             ],
             "cStandard": "c99",
             "intelliSenseMode": "macos-clang-arm64"
@@ -157,7 +157,7 @@ elif(platform.system() == "Linux"):
                 "PL_LOG_ON",
                 "PL_PROFILE_ON",
                 "PL_IO_IMPLEMENTATION",
-                "PL_DRAWING_VULKAN_IMPLEMENTATION"
+                "PL_DRAW_VULKAN_IMPLEMENTATION"
             ],
             "cStandard": "c99",
             "intelliSenseMode": "linux-gcc-x64"
