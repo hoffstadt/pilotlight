@@ -67,7 +67,7 @@
 @set PL_COMPILER_FLAGS=-Zc:preprocessor -nologo -std:c11 -EHsc -W4 -WX -wd4201 -wd4100 -wd4996 -wd4505 -wd4189 -wd5105
 
 @rem common libraries
-@set PL_LINK_LIBRARIES=user32.lib ws2_32.lib shlwapi.lib propsys.lib comctl32.lib Shell32.lib Ole32.lib vulkan-1.lib pl.lib
+@set PL_LINK_LIBRARIES=user32.lib ws2_32.lib shlwapi.lib propsys.lib comctl32.lib Shell32.lib Ole32.lib vulkan-1.lib pilotlight.lib
 
 @rem release specific
 @if "%PL_CONFIG%" equ "Release" (
@@ -113,14 +113,14 @@
 @rem |                          pl lib                                       |
 @rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-@set PL_SOURCES=pl.c
+@set PL_SOURCES=pilotlight.c
 
 @rem run compiler
 @echo.
-@echo [1m[93mStep 1: pl.lib[0m
-@echo [1m[93m~~~~~~~~~~~~~~[0m
+@echo [1m[93mStep 1: pilotlight.lib[0m
+@echo [1m[93m~~~~~~~~~~~~~~~~~~~~~~[0m
 @echo [1m[36mCompiling...[0m
-cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% -c -permissive- %PL_SOURCES% -Fe..\out\pl.lib -Fo..\out\
+cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% -c -permissive- %PL_SOURCES% -Fe..\out\pilotlight.lib -Fo..\out\
 
 @rem check build status
 @set PL_BUILD_STATUS=%ERRORLEVEL%
@@ -132,7 +132,7 @@ cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% -c -permissive- %PL
 @echo [1m[36mLinking...[0m
 
 @rem link object files into a shared lib
-lib -nologo -OUT:..\out\pl.lib ..\out\*.obj
+lib -nologo -OUT:..\out\pilotlight.lib ..\out\*.obj
 
 :CleanupPlLib
     @echo [1m[36mCleaning...[0m
@@ -170,7 +170,7 @@ cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% -permissive- %PL_SO
 @rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 :MainBuild
 
-@set PL_SOURCES="win32_pl.c"
+@set PL_SOURCES="pl_main_win32.c"
 
 @rem run compiler
 @echo.
