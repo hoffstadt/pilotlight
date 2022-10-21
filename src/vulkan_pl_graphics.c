@@ -78,12 +78,12 @@ pl__select_physical_device(VkInstance instance, plVulkanDevice* deviceOut)
     static const char *ptrDeviceTypeName[] = {"Other", "Integrated", "Discrete", "Virtual", "CPU"};
 
     // print info on chosen device
-    printf("Device ID: %u", deviceOut->deviceProps.deviceID);
-    printf("Vendor ID: %u", deviceOut->deviceProps.vendorID);
-    printf("API Version: %u", deviceOut->deviceProps.apiVersion);
-    printf("Driver Version: %u", deviceOut->deviceProps.driverVersion);
-    printf("Device Type: %s", ptrDeviceTypeName[deviceOut->deviceProps.deviceType]);
-    printf("Device Name: %s", deviceOut->deviceProps.deviceName);
+    printf("Device ID: %u\n", deviceOut->deviceProps.deviceID);
+    printf("Vendor ID: %u\n", deviceOut->deviceProps.vendorID);
+    printf("API Version: %u\n", deviceOut->deviceProps.apiVersion);
+    printf("Driver Version: %u\n", deviceOut->deviceProps.driverVersion);
+    printf("Device Type: %s\n", ptrDeviceTypeName[deviceOut->deviceProps.deviceType]);
+    printf("Device Name: %s\n", deviceOut->deviceProps.deviceName);
     return iBestDvcIdx;
 }
 

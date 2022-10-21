@@ -27,7 +27,7 @@ if(platform.system() == "Windows"):
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/out/",
             "environment": [],
-            "console": "internalConsole"
+            "console": "integratedTerminal"
         }
     ]
 }

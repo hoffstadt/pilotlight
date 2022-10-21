@@ -14,6 +14,7 @@ Index of this file:
 // [SECTION] includes
 //-----------------------------------------------------------------------------
 
+#include "pl.h"
 #include "pl_os.h"
 #include <stdio.h> // file api
 
