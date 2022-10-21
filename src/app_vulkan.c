@@ -24,7 +24,7 @@ Index of this file:
 #include "pl_ds.h"
 #include "pl_io.h"
 #include "pl_memory.h"
-#include "pl_drawing_vulkan.h"
+#include "pl_draw_vulkan.h"
 #include <string.h> // memset
 
 //-----------------------------------------------------------------------------
