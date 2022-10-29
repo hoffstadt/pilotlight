@@ -25,6 +25,7 @@ Index of this file:
 #include "pl_log.h"
 #include "pl_memory.h"
 #include "pl_draw_metal.h"
+#include "pl_math.h"
 
 //-----------------------------------------------------------------------------
 // [SECTION] structs
@@ -166,6 +167,8 @@ pl_app_resize(plAppData* appData)
 PL_EXPORT void
 pl_app_render(plAppData* appData)
 {
+    pl_new_io_frame();
+
     plIOContext* ptIOCtx = pl_get_io_context();
     appData->graphics.metalLayer = ptIOCtx->pBackendRendererData;
 
@@ -194,19 +197,54 @@ pl_app_render(plAppData* appData)
     // draw profiling info
     pl_begin_profile_sample("Draw Profiling Info");
 
-    static char pcDeltaTime[64] = {0};
-    pl_sprintf(pcDeltaTime, "%.3f ms", pl_get_io_context()->fDeltaTime);
-    pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){10.0f, 10.0f}, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, pcDeltaTime, 0.0f);
+    plIOContext* ptIoCtx = pl_get_io_context();
+    static char acBuffer[255] = {0};
+    float fCursorPos = 10.0f;
+    pl_sprintf(acBuffer, "Delta Time: %.3f ms", ptIoCtx->fDeltaTime);
+    pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){10.0f, fCursorPos}, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, acBuffer, 0.0f);
+    fCursorPos += 15.0f;
 
-    char cPProfileValue[64] = {0};
-    for(uint32_t i = 0u; i < pl_sb_size(appData->tProfileCtx.tPLastFrame->sbSamples); i++)
-    {
-        plProfileSample* tPSample = &appData->tProfileCtx.tPLastFrame->sbSamples[i];
-        pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){10.0f + (float)tPSample->uDepth * 15.0f, 50.0f + (float)i * 15.0f}, (plVec4){1.0f, 1.0f, 1.0f, 1.0f}, tPSample->cPName, 0.0f);
-        plVec2 sampleTextSize = pl_calculate_text_size(&appData->fontAtlas.sbFonts[0], 13.0f, tPSample->cPName, 0.0f);
-        pl_sprintf(cPProfileValue, ": %0.5f", tPSample->dDuration);
-        pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){sampleTextSize.x + 15.0f + (float)tPSample->uDepth * 15.0f, 50.0f + (float)i * 15.0f}, (plVec4){1.0f, 1.0f, 1.0f, 1.0f}, cPProfileValue, 0.0f);
-    }
+    pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){10.0f, fCursorPos}, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, "Mouse Input", 0.0f);
+    fCursorPos += 15.0f;
+
+    pl_sprintf(acBuffer, "  Pos: %.0f, %.0f", ptIoCtx->_tMousePos.x, ptIOCtx->_tMousePos.y);
+    pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){10.0f, fCursorPos}, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, acBuffer, 0.0f);
+    fCursorPos += 15.0f;
+
+    pl_sprintf(acBuffer, "  Drag: %s", pl_is_mouse_dragging(PL_MOUSE_BUTTON_LEFT, -1.0f) ? "true" : "false");
+    pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){10.0f, fCursorPos}, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, acBuffer, 0.0f);
+    fCursorPos += 15.0f;
+
+    plVec2 tDragDelta = pl_get_mouse_drag_delta(PL_MOUSE_BUTTON_LEFT, -1.0f);
+    pl_sprintf(acBuffer, "  Drag Delta: %.0f, %.0f", tDragDelta.x, tDragDelta.y);
+    pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){10.0f, fCursorPos}, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, acBuffer, 0.0f);
+    fCursorPos += 15.0f;
+
+    pl_sprintf(acBuffer, "  Clicked: %s", pl_is_mouse_clicked(PL_MOUSE_BUTTON_LEFT, false) ? "true" : "false");
+    pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){10.0f, fCursorPos}, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, acBuffer, 0.0f);
+    fCursorPos += 15.0f;
+
+    pl_sprintf(acBuffer, "  Released: %s", pl_is_mouse_released(PL_MOUSE_BUTTON_LEFT) ? "true" : "false");
+    pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){10.0f, fCursorPos}, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, acBuffer, 0.0f);
+    fCursorPos += 15.0f;
+
+    pl_sprintf(acBuffer, "  Double Clicked: %s", pl_is_mouse_double_clicked(PL_MOUSE_BUTTON_LEFT) ? "true" : "false");
+    pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){10.0f, fCursorPos}, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, acBuffer, 0.0f);
+    fCursorPos += 15.0f;
+
+    pl_sprintf(acBuffer, "  Down: %s", pl_is_mouse_down(PL_MOUSE_BUTTON_LEFT) ? "true" : "false");
+    pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){10.0f, fCursorPos}, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, acBuffer, 0.0f);
+    fCursorPos += 15.0f;
+
+    // char cPProfileValue[64] = {0};
+    // for(uint32_t i = 0u; i < pl_sb_size(appData->tProfileCtx.tPLastFrame->sbSamples); i++)
+    // {
+    //     plProfileSample* tPSample = &appData->tProfileCtx.tPLastFrame->sbSamples[i];
+    //     pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){10.0f + (float)tPSample->uDepth * 15.0f, 50.0f + (float)i * 15.0f}, (plVec4){1.0f, 1.0f, 1.0f, 1.0f}, tPSample->cPName, 0.0f);
+    //     plVec2 sampleTextSize = pl_calculate_text_size(&appData->fontAtlas.sbFonts[0], 13.0f, tPSample->cPName, 0.0f);
+    //     pl_sprintf(cPProfileValue, ": %0.5f", tPSample->dDuration);
+    //     pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){sampleTextSize.x + 15.0f + (float)tPSample->uDepth * 15.0f, 50.0f + (float)i * 15.0f}, (plVec4){1.0f, 1.0f, 1.0f, 1.0f}, cPProfileValue, 0.0f);
+    // }
     pl_end_profile_sample();
 
     // draw commands

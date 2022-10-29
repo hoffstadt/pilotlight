@@ -16,12 +16,14 @@ Index of this file:
 // [SECTION] includes
 //-----------------------------------------------------------------------------
 
-#include "pl_draw.h"
-#include "pl_ds.h"
-#include "stb_rect_pack.h"
-#include "stb_truetype.h"
 #include <math.h>
 #include <stdio.h>
+#include "stb_rect_pack.h"
+#include "stb_truetype.h"
+#include "pl_draw.h"
+#include "pl_ds.h"
+#include "pl_math.h"
+
 
 //-----------------------------------------------------------------------------
 // [SECTION] internal structs

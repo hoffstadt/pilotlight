@@ -127,24 +127,6 @@ plVec2 pl_calculate_text_size     (plFont* font, float size, const char* text, f
 // [SECTION] structs
 //-----------------------------------------------------------------------------
 
-typedef union plVec2_t
-{
-    struct { float x, y; };
-    struct { float u, v; };
-} plVec2;
-
-typedef union plVec3_t
-{
-    struct { float x, y, z; };
-    struct { float r, g, b; };
-} plVec3;
-
-typedef union plVec4_t
-{
-    struct{ float x, y, z, w;};
-    struct{ float r, g, b, a;};
-} plVec4;
-
 typedef struct plDrawVertex_t
 {
     float pos[2];
