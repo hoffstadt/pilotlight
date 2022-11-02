@@ -20,8 +20,8 @@ Index of this file:
 // [SECTION] forward declarations & basic types
 // [SECTION] global context
 // [SECTION] public api
-// [SECTION] structs
 // [SECTION] enums
+// [SECTION] structs
 // [SECTION] c file
 */
 
@@ -33,7 +33,7 @@ Index of this file:
 //-----------------------------------------------------------------------------
 
 #ifndef PL_DECLARE_STRUCT
-#define PL_DECLARE_STRUCT(name) typedef struct name ##_t name
+#define PL_DECLARE_STRUCT(name) typedef struct _ ## name  name
 #endif
 
 //-----------------------------------------------------------------------------
@@ -51,6 +51,7 @@ Index of this file:
 // forward declarations
 PL_DECLARE_STRUCT(plIOContext);
 PL_DECLARE_STRUCT(plInputEvent);
+PL_DECLARE_STRUCT(plKeyData);
 
 // enums
 typedef int plKey;
@@ -72,8 +73,15 @@ void         pl_cleanup_io_context   (void);
 void         pl_set_io_context       (plIOContext* ptCtx);
 plIOContext* pl_get_io_context       (void);
 void         pl_new_io_frame         (void);
+void         pl_end_io_frame         (void);
 
-// mouse input
+// keyboard
+bool         pl_is_key_down           (plKey tKey);
+bool         pl_is_key_pressed        (plKey tKey, bool bRepeat);
+bool         pl_is_key_released       (plKey tKey);
+bool         pl_get_key_pressed_amount(plKey tKey, float fRepeatDelay, float fRate);
+
+// mouse
 bool         pl_is_mouse_down          (plMouseButton tButton);
 bool         pl_is_mouse_clicked       (plMouseButton tButton, bool bRepeat);
 bool         pl_is_mouse_released      (plMouseButton tButton);
@@ -86,55 +94,11 @@ plVec2       pl_get_mouse_pos          (void);
 bool         pl_is_mouse_pos_valid     (plVec2 tPos);
 
 // input functions
+plKeyData*   pl_get_key_data          (plKey tKey);
 void         pl_add_key_event         (plKey tKey, bool bDown);
 void         pl_add_mouse_pos_event   (float fX, float fY);
 void         pl_add_mouse_button_event(int iButton, bool bDown);
 void         pl_add_mouse_wheel_event (float fX, float fY);
-
-//-----------------------------------------------------------------------------
-// [SECTION] structs
-//-----------------------------------------------------------------------------
-
-typedef struct plIOContext_t
-{
-    double   dTime;
-    float    fDeltaTime;
-    float    afMainViewportSize[2];
-    uint64_t ulFrameCount;
-
-
-    // settings
-    float  fMouseDragThreshold;      // default 6.0f
-    float  fMouseDoubleClickTime;    // default 0.3f seconds
-    float  fMouseDoubleClickMaxDist; // default 6.0f
-    float  fKeyRepeatDelay;          // default 0.275f
-    float  fKeyRepeatRate;           // default 0.050f
-    void*  pUserData;
-    void*  pBackendPlatformData;
-    void*  pBackendRendererData;
-
-    // [INTERNAL]
-    plInputEvent* _sbtInputEvents;
-
-    // main input state
-    plVec2 _tMousePos;
-    bool   _abMouseDown[5];
-
-    // other state
-    plVec2   _tLastValidMousePos;
-    plVec2   _tMouseDelta;
-    plVec2   _tMousePosPrev;              // previous mouse position
-    plVec2   _atMouseClickedPos[5];       // position when clicked
-    double   _adMouseClickedTime[5];      // time of last click
-    bool     _abMouseClicked[5];          // mouse went from !down to down
-    uint32_t _auMouseClickedCount[5];     // 
-    uint32_t _auMouseClickedLastCount[5]; // 
-    bool     _abMouseReleased[5];         // mouse went from down to !down
-    float    _afMouseDownDuration[5];     // duration mouse button has been down (0.0f == just clicked)
-    float    _afMouseDownDurationPrev[5]; // previous duration of mouse button down
-    float    _afMouseDragMaxDistSqr[5];   // squared max distance mouse traveled from clicked position
-
-} plIOContext;
 
 //-----------------------------------------------------------------------------
 // [SECTION] enums
@@ -276,6 +240,60 @@ enum plKey_
     PL_KEY_COUNT // no valid plKey_ is ever greater than this value
 };
 
+//-----------------------------------------------------------------------------
+// [SECTION] structs
+//-----------------------------------------------------------------------------
+
+typedef struct _plKeyData
+{
+    bool  bDown;
+    float fDownDuration;
+    float fDownDurationPrev;
+} plKeyData;
+
+typedef struct _plIOContext
+{
+    double   dTime;
+    float    fDeltaTime;
+    float    afMainViewportSize[2];
+    uint64_t ulFrameCount;
+
+    // settings
+    float  fMouseDragThreshold;      // default 6.0f
+    float  fMouseDoubleClickTime;    // default 0.3f seconds
+    float  fMouseDoubleClickMaxDist; // default 6.0f
+    float  fKeyRepeatDelay;          // default 0.275f
+    float  fKeyRepeatRate;           // default 0.050f
+    void*  pUserData;
+    void*  pBackendPlatformData;
+    void*  pBackendRendererData;
+
+    // [INTERNAL]
+    plInputEvent* _sbtInputEvents;
+
+    // main input state
+    plVec2 _tMousePos;
+    bool   _abMouseDown[5];
+    float  _fMouseWheel;
+    float  _fMouseWheelH;
+
+    // other state
+    plKeyData _tKeyData[PL_KEY_COUNT];
+    plVec2    _tLastValidMousePos;
+    plVec2    _tMouseDelta;
+    plVec2    _tMousePosPrev;              // previous mouse position
+    plVec2    _atMouseClickedPos[5];       // position when clicked
+    double    _adMouseClickedTime[5];      // time of last click
+    bool      _abMouseClicked[5];          // mouse went from !down to down
+    uint32_t  _auMouseClickedCount[5];     // 
+    uint32_t  _auMouseClickedLastCount[5]; // 
+    bool      _abMouseReleased[5];         // mouse went from down to !down
+    float     _afMouseDownDuration[5];     // duration mouse button has been down (0.0f == just clicked)
+    float     _afMouseDownDurationPrev[5]; // previous duration of mouse button down
+    float     _afMouseDragMaxDistSqr[5];   // squared max distance mouse traveled from clicked position
+
+} plIOContext;
+
 #endif // PL_IO_H
 
 //-----------------------------------------------------------------------------
@@ -302,7 +320,7 @@ Index of this file:
 
 #ifndef PL_ASSERT
 #include <assert.h>
-#define PL_ASSERT(x) assert(x)
+#define PL_ASSERT(x) assert((x))
 #endif
 
 //-----------------------------------------------------------------------------
@@ -341,7 +359,7 @@ typedef enum
 // [SECTION] internal & opaque structs
 //-----------------------------------------------------------------------------
 
-typedef struct plInputEvent_t
+typedef struct _plInputEvent
 {
     plInputEventType   tType;
     plInputEventSource tSource;
@@ -392,6 +410,7 @@ plIOContext* gptIOContext = NULL;
 
 static void pl__update_events(void);
 static void pl__update_mouse_inputs(void);
+static void pl__update_keyboard_inputs(void);
 static int  pl__calc_typematic_repeat_amount(float fT0, float fT1, float fRepeatDelay, float fRepeatRate);
 
 //-----------------------------------------------------------------------------
@@ -438,7 +457,23 @@ pl_new_io_frame(void)
     ptIO->ulFrameCount++;
 
     pl__update_events();
+    pl__update_keyboard_inputs();
     pl__update_mouse_inputs();
+}
+
+void
+pl_end_io_frame(void)
+{
+    plIOContext* ptIO = gptIOContext;
+    ptIO->_fMouseWheel = 0.0f;
+    ptIO->_fMouseWheelH = 0.0f;
+}
+
+plKeyData*
+pl_get_key_data(plKey tKey)
+{
+    PL_ASSERT(tKey > PL_KEY_NONE && tKey < PL_KEY_COUNT && "Key not valide");
+    return &gptIOContext->_tKeyData[tKey];
 }
 
 void
@@ -487,6 +522,56 @@ pl_add_mouse_wheel_event(float fX, float fY)
         .fWheelY  = fY
     };
     pl_sb_push(gptIOContext->_sbtInputEvents, tEvent);
+}
+
+bool
+pl_is_key_down(plKey tKey)
+{
+    const plKeyData* ptData = pl_get_key_data(tKey);
+    return ptData->bDown;
+}
+
+bool
+pl_is_key_pressed(plKey tKey, bool bRepeat)
+{
+    const plKeyData* ptData = pl_get_key_data(tKey);
+    if (!ptData->bDown) // In theory this should already be encoded as (DownDuration < 0.0f), but testing this facilitates eating mechanism (until we finish work on input ownership)
+        return false;
+    const float fT = ptData->fDownDuration;
+    if (fT < 0.0f)
+        return false;
+
+    bool bPressed = (fT == 0.0f);
+    if (!bPressed && bRepeat)
+    {
+        const float fRepeatDelay = gptIOContext->fKeyRepeatDelay;
+        const float fRepeatRate = gptIOContext->fKeyRepeatRate;
+        bPressed = (fT > fRepeatDelay) && pl_get_key_pressed_amount(tKey, fRepeatDelay, fRepeatRate) > 0;
+    }
+
+    if (!bPressed)
+        return false;
+    return true;
+}
+
+bool
+pl_is_key_released(plKey tKey)
+{
+    const plKeyData* ptData = pl_get_key_data(tKey);
+    if (ptData->fDownDurationPrev < 0.0f || ptData->bDown)
+        return false;
+    return true;
+}
+
+bool
+pl_get_key_pressed_amount(plKey tKey, float fRepeatDelay, float fRate)
+{
+    plIOContext* ptIO = gptIOContext;
+    const plKeyData* ptData = pl_get_key_data(tKey);
+    if (!ptData->bDown) // In theory this should already be encoded as (DownDuration < 0.0f), but testing this facilitates eating mechanism (until we finish work on input ownership)
+        return 0;
+    const float fT = ptData->fDownDuration;
+    return pl__calc_typematic_repeat_amount(fT - ptIO->fDeltaTime, fT, fRepeatDelay, fRate);
 }
 
 bool
@@ -591,6 +676,8 @@ pl__update_events(void)
 
             case PL_INPUT_EVENT_TYPE_MOUSE_WHEEL:
             {
+                ptIO->_fMouseWheelH += ptEvent->fWheelX;
+                ptIO->_fMouseWheel += ptEvent->fWheelY;
                 break;
             }
 
@@ -603,6 +690,10 @@ pl__update_events(void)
 
             case PL_INPUT_EVENT_TYPE_KEY:
             {
+                plKey tKey = ptEvent->tKey;
+                PL_ASSERT(tKey != PL_KEY_NONE);
+                plKeyData* ptKeyData = pl_get_key_data(tKey);
+                ptKeyData->bDown = ptEvent->bKeyDown;
                 break;
             }
 
@@ -615,6 +706,20 @@ pl__update_events(void)
     }
 
     pl_sb_reset(ptIO->_sbtInputEvents);
+}
+
+static void
+pl__update_keyboard_inputs(void)
+{
+   plIOContext* ptIO = gptIOContext; 
+
+    // Update keys
+    for (uint32_t i = 0; i < PL_KEY_COUNT; i++)
+    {
+        plKeyData* ptKeyData = &ptIO->_tKeyData[i];
+        ptKeyData->fDownDurationPrev = ptKeyData->fDownDuration;
+        ptKeyData->fDownDuration = ptKeyData->bDown ? (ptKeyData->fDownDuration < 0.0f ? 0.0f : ptKeyData->fDownDuration + ptIO->fDeltaTime) : -1.0f;
+    }
 }
 
 static void

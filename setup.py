@@ -48,6 +48,7 @@ if(platform.system() == "Windows"):
                 "_DEBUG",
                 "PL_PROFILE_ON",
                 "PL_LOG_IMPLEMENTATION",
+                "PL_MEMORY_IMPLEMENTATION",
                 "PL_PROFILE_IMPLEMENTATION",
                 "PL_LOG_ON",
                 "PL_IO_IMPLEMENTATION",
@@ -105,6 +106,7 @@ elif(platform.system() == "Darwin"):
                 "PL_PROFILE_IMPLEMENTATION",
                 "PL_LOG_ON",
                 "PL_PROFILE_ON",
+                "PL_MEMORY_IMPLEMENTATION",
                 "PL_IO_IMPLEMENTATION",
                 "PL_DRAW_METAL_IMPLEMENTATION",
                 "PL_DRAW_VULKAN_IMPLEMENTATION"
@@ -155,6 +157,7 @@ elif(platform.system() == "Linux"):
                 "_DEBUG",
                 "PL_LOG_IMPLEMENTATION",
                 "PL_PROFILE_IMPLEMENTATION",
+                "PL_MEMORY_IMPLEMENTATION",
                 "PL_LOG_ON",
                 "PL_PROFILE_ON",
                 "PL_IO_IMPLEMENTATION",

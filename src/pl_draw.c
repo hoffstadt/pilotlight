@@ -24,13 +24,11 @@ Index of this file:
 #include "pl_ds.h"
 #include "pl_math.h"
 
-
 //-----------------------------------------------------------------------------
 // [SECTION] internal structs
 //-----------------------------------------------------------------------------
 
-
-typedef struct plFontPrepData_t
+typedef struct _plFontPrepData
 {
     stbtt_fontinfo    fontInfo;
     stbtt_pack_range* ranges;

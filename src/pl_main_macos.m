@@ -83,7 +83,7 @@ static NSTextInputContext*  gInputContext = NULL;
 static id                   gMonitor;
 CFTimeInterval              gTime;
 
-typedef struct plAppData_t plAppData;
+typedef struct _plAppData plAppData;
 static void* (*pl_app_load)    (plIOContext* ptIOCtx, plAppData* ptAppData);
 static void  (*pl_app_setup)   (plAppData* ptAppData);
 static void  (*pl_app_shutdown)(plAppData* ptAppData);
