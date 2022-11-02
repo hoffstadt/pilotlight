@@ -402,7 +402,7 @@ pl_stack_allocator_alloc_top(plStackAllocator* ptAllocator, size_t szSize)
 
     // update offset
     void* pBuffer = ptAllocator->pucBuffer + szOffset;
-    pAllocator->szTopOffset = szOffset;
+    ptAllocator->szTopOffset = szOffset;
 
     return pBuffer;
 }
