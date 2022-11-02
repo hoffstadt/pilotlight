@@ -107,7 +107,7 @@ pl_create_instance(plVulkanGraphics* ptGraphics, uint32_t uVersion, bool bEnable
         pl_sb_push(sbpcEnabledExtensions, "VK_EXT_metal_surface");
         pl_sb_push(sbpcEnabledExtensions, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
     #else // linux
-        pl_sb_push(sbpcEnabledExtensions, VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
+        pl_sb_push(sbpcEnabledExtensions, VK_KHR_XCB_SURFACE_EXTENSION_NAME);
     #endif
 
     if(bEnableValidation)
