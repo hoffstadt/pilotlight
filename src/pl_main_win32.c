@@ -93,7 +93,7 @@ int main()
         return -1;
 
     // load library
-    if(pl_load_library(&gAppLibrary, "app.dll", "app_", "lock.tmp"))
+    if(pl_load_library(&gAppLibrary, "./app.dll", "./app_", "./lock.tmp"))
     {
         pl_app_load     = (void* (__cdecl  *)(plIOContext*, plAppData*)) pl_load_library_function(&gAppLibrary, "pl_app_load");
         pl_app_setup    = (void  (__cdecl  *)(plAppData*)) pl_load_library_function(&gAppLibrary, "pl_app_setup");

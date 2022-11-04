@@ -54,6 +54,7 @@ if(platform.system() == "Windows"):
                 "PL_IO_IMPLEMENTATION",
                 "PL_MEMORY_IMPLEMENTATION",
                 "PL_DRAW_DX11_IMPLEMENTATION",
+                "PL_EXT_IMPLEMENTATION",
                 "PL_DRAW_VULKAN_IMPLEMENTATION"
             ],
             "windowsSdkVersion": "10.0.19041.0",
@@ -111,6 +112,7 @@ elif(platform.system() == "Darwin"):
                 "PL_IO_IMPLEMENTATION",
                 "PL_MEMORY_IMPLEMENTATION",
                 "PL_DRAW_METAL_IMPLEMENTATION",
+                "PL_EXT_IMPLEMENTATION",
                 "PL_DRAW_VULKAN_IMPLEMENTATION"
             ],
             "cStandard": "c99",
@@ -164,6 +166,7 @@ elif(platform.system() == "Linux"):
                 "PL_PROFILE_ON",
                 "PL_IO_IMPLEMENTATION",
                 "PL_MEMORY_IMPLEMENTATION",
+                "PL_EXT_IMPLEMENTATION",
                 "PL_DRAW_VULKAN_IMPLEMENTATION"
             ],
             "cStandard": "c99",
