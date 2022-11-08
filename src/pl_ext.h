@@ -206,8 +206,8 @@ pl_load_extension(plExtension* ptExtension)
             ptExtension->pl_load   = (void (__cdecl *)(plDataRegistry*, plExtensionRegistry*, plExtension*, bool)) pl_load_library_function(&tLibrary, ptExtension->pcLoadFunc);
             ptExtension->pl_unload = (void (__cdecl *)(plDataRegistry*, plExtensionRegistry*, plExtension*))       pl_load_library_function(&tLibrary, ptExtension->pcUnloadFunc);
         #else // linux
-            ptExtension.pl_load   = (void (__attribute__(()) *)(plExtensionRegistry*, plExtension*, bool)) pl_load_library_function(&tExtensionInfo.tLibrary, ptExtension->pcLoadFunc);
-            ptExtension.pl_unload = (void (__attribute__(()) *)(plExtensionRegistry*, plExtension*))       pl_load_library_function(&tExtensionInfo.tLibrary, ptExtension->pcUnloadFunc);
+            ptExtension->pl_load   = (void (__attribute__(()) *)(plDataRegistry*, plExtensionRegistry*, plExtension*, bool)) pl_load_library_function(&tLibrary, ptExtension->pcLoadFunc);
+            ptExtension->pl_unload = (void (__attribute__(()) *)(plDataRegistry*, plExtensionRegistry*, plExtension*))       pl_load_library_function(&tLibrary, ptExtension->pcUnloadFunc);
         #endif
 
         PL_ASSERT(ptExtension->pl_load);
@@ -275,8 +275,8 @@ pl_handle_extension_reloads(void)
             ptExtension->pl_load   = (void (__cdecl *)(plDataRegistry*, plExtensionRegistry*, plExtension*, bool)) pl_load_library_function(ptLibrary, ptExtension->pcLoadFunc);
             ptExtension->pl_unload = (void (__cdecl *)(plDataRegistry*, plExtensionRegistry*, plExtension*))       pl_load_library_function(ptLibrary, ptExtension->pcUnloadFunc);
         #else // linux
-            ptExtension.pl_load   = (void (__attribute__(()) *)(plExtensionRegistry*, plExtension*, bool)) pl_load_library_function(ptLibrary, ptExtension->pcLoadFunc);
-            ptExtension.pl_unload = (void (__attribute__(()) *)(plExtensionRegistry*, plExtension*))       pl_load_library_function(ptLibrary, ptExtension->pcUnloadFunc);
+            ptExtension->pl_load   = (void (__attribute__(()) *)(plDataRegistry*, plExtensionRegistry*, plExtension*, bool)) pl_load_library_function(ptLibrary, ptExtension->pcLoadFunc);
+            ptExtension->pl_unload = (void (__attribute__(()) *)(plDataRegistry*, plExtensionRegistry*, plExtension*))       pl_load_library_function(ptLibrary, ptExtension->pcUnloadFunc);
         #endif
 
         PL_ASSERT(ptExtension->pl_load);

@@ -30,4 +30,4 @@ pl_get_draw_extension_info(plExtension* ptExtension)
     #endif
 }
 
-#endif PL_DRAW_EXTENSION_H
+#endif // PL_DRAW_EXTENSION_H
