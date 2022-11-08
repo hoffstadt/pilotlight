@@ -41,6 +41,8 @@ if(platform.system() == "Windows"):
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/extensions",
                 "${workspaceFolder}/dependencies/stb",
                 "${env:VK_SDK_PATH}/Include"
             ],
@@ -50,6 +52,7 @@ if(platform.system() == "Windows"):
                 "PL_LOG_IMPLEMENTATION",
                 "PL_MEMORY_IMPLEMENTATION",
                 "PL_PROFILE_IMPLEMENTATION",
+                "PL_REGISTRY_IMPLEMENTATION",
                 "PL_LOG_ON",
                 "PL_IO_IMPLEMENTATION",
                 "PL_MEMORY_IMPLEMENTATION",
@@ -100,6 +103,8 @@ elif(platform.system() == "Darwin"):
             "name": "Apple",
             "includePath": [
                 "${workspaceFolder}/**",
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/extensions",
                 "${workspaceFolder}/dependencies/stb",
             ],
             "defines": [
@@ -109,6 +114,7 @@ elif(platform.system() == "Darwin"):
                 "PL_LOG_ON",
                 "PL_PROFILE_ON",
                 "PL_MEMORY_IMPLEMENTATION",
+                "PL_REGISTRY_IMPLEMENTATION",
                 "PL_IO_IMPLEMENTATION",
                 "PL_MEMORY_IMPLEMENTATION",
                 "PL_DRAW_METAL_IMPLEMENTATION",
@@ -155,6 +161,8 @@ elif(platform.system() == "Linux"):
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/extensions",
                 "${workspaceFolder}/dependencies/stb",
             ],
             "defines": [
@@ -164,6 +172,7 @@ elif(platform.system() == "Linux"):
                 "PL_MEMORY_IMPLEMENTATION",
                 "PL_LOG_ON",
                 "PL_PROFILE_ON",
+                "PL_REGISTRY_IMPLEMENTATION",
                 "PL_IO_IMPLEMENTATION",
                 "PL_MEMORY_IMPLEMENTATION",
                 "PL_EXT_IMPLEMENTATION",

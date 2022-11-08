@@ -10,7 +10,7 @@ Index of this file:
 // [SECTION] pl_app_setup
 // [SECTION] pl_app_shutdown
 // [SECTION] pl_app_resize
-// [SECTION] pl_app_render
+// [SECTION] pl_app_update
 */
 
 //-----------------------------------------------------------------------------
@@ -227,11 +227,11 @@ pl_app_resize(plAppData* ptAppData)
 }
 
 //-----------------------------------------------------------------------------
-// [SECTION] pl_app_render
+// [SECTION] pl_app_update
 //-----------------------------------------------------------------------------
 
 PL_EXPORT void
-pl_app_render(plAppData* ptAppData)
+pl_app_update(plAppData* ptAppData)
 {
     pl_new_io_frame();
 

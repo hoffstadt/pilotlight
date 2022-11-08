@@ -18,9 +18,7 @@ Index of this file:
 // [SECTION] defines
 // [SECTION] includes
 // [SECTION] forward declarations & basic types
-// [SECTION] global context
 // [SECTION] public api
-// [SECTION] enums
 // [SECTION] structs
 // [SECTION] c file
 */
@@ -52,11 +50,13 @@ Index of this file:
 //-----------------------------------------------------------------------------
 
 // forward declarations
-PL_DECLARE_STRUCT(plExtensionInfo);
 PL_DECLARE_STRUCT(plExtension);
 PL_DECLARE_STRUCT(plApi);
 PL_DECLARE_STRUCT(plExtensionRegistry);
 
+
+PL_DECLARE_STRUCT(plSharedLibrary);
+PL_DECLARE_STRUCT(plDataRegistry);
 
 //-----------------------------------------------------------------------------
 // [SECTION] public api
@@ -67,8 +67,10 @@ void                 pl_initialize_extension_registry(plExtensionRegistry* ptReg
 void                 pl_cleanup_extension_registry   (void);
 void                 pl_set_extension_registry       (plExtensionRegistry* ptRegistry);
 plExtensionRegistry* pl_get_extension_registry       (void);
+void                 pl_handle_extension_reloads     (void);
 
 // extensions
+plExtension*         pl_get_extension   (const char* pcname);
 void                 pl_load_extension  (plExtension* ptExtension);
 void                 pl_unload_extension(plExtension* ptExtension);
 void*                pl_get_api         (plExtension* ptExtension, const char* pcApiName);
@@ -93,12 +95,16 @@ typedef struct _plExtension
     const char*  pcUnloadFunc;
     plApi*       atApis;
     uint32_t     uApiCount;
+
+    void (*pl_load)   (plDataRegistry* ptDataRegistry, plExtensionRegistry* ptExtensionRegistry, plExtension* ptExtension, bool bReload);
+    void (*pl_unload) (plDataRegistry* ptDataRegistry, plExtensionRegistry* ptRegistry, plExtension* ptExtension);
 } plExtension;
 
 typedef struct _plExtensionRegistry
 {
-    plExtensionInfo*  sbtExtensions;
-    plExtensionInfo** sbtHotExtensions;
+    plExtension*      sbtExtensions;
+    plSharedLibrary*  sbtLibs;
+    plSharedLibrary** sbtHotLibs;
 } plExtensionRegistry;
 
 #endif // PL_EXT_H
@@ -110,6 +116,8 @@ typedef struct _plExtensionRegistry
 /*
 Index of this file:
 // [SECTION] includes
+// [SECTION] global context
+// [SECTION] public api implementation
 */
 
 //-----------------------------------------------------------------------------
@@ -117,6 +125,7 @@ Index of this file:
 //-----------------------------------------------------------------------------
 
 #include "pilotlight.h"
+#include "pl_registry.h"
 #include "pl_ds.h"
 #include "pl_os.h"
 
@@ -134,19 +143,6 @@ Index of this file:
 plExtensionRegistry* gptExtRegistry = NULL;
 
 //-----------------------------------------------------------------------------
-// [SECTION] internal & opaque structs
-//-----------------------------------------------------------------------------
-
-typedef struct _plExtensionInfo
-{
-    const char*     pcName;
-    plSharedLibrary tLibrary;
-
-    void (*pl_load)   (plExtensionRegistry* ptRegistry, plExtension* ptExtension, bool bReload);
-    void (*pl_unload) (plExtensionRegistry* ptRegistry, plExtension* ptExtension);
-} plExtensionInfo;
-
-//-----------------------------------------------------------------------------
 // [SECTION] public api implementation
 //-----------------------------------------------------------------------------
 
@@ -159,7 +155,10 @@ pl_initialize_extension_registry(plExtensionRegistry* ptRegistry)
 void
 pl_cleanup_extension_registry(void)
 {
-
+    PL_ASSERT(gptExtRegistry && "global extension registry not set");
+    pl_sb_free(gptExtRegistry->sbtExtensions);
+    pl_sb_free(gptExtRegistry->sbtHotLibs);
+    pl_sb_free(gptExtRegistry->sbtLibs);
 }
 
 void
@@ -174,36 +173,48 @@ pl_get_extension_registry(void)
     return gptExtRegistry;
 }
 
+plExtension*
+pl_get_extension(const char* pcname)
+{
+    PL_ASSERT(gptExtRegistry && "global extension registry not set");
+
+    for(uint32_t i = 0; i < pl_sb_size(gptExtRegistry->sbtExtensions); i++)
+    {
+        if(strcmp(pcname, gptExtRegistry->sbtExtensions[i].pcExtensionName) == 0)
+            return &gptExtRegistry->sbtExtensions[i];
+    }
+    return NULL;
+}
+
 void
 pl_load_extension(plExtension* ptExtension)
 {
     PL_ASSERT(gptExtRegistry && "global extension registry not set");
 
     // check if extension exists already
-    for(uint32_t i = 0; i < pl_sb_size(gptExtRegistry->sbtExtensions); i++)
+    for(uint32_t i = 0; i < pl_sb_size(gptExtRegistry->sbtLibs); i++)
     {
-        if(strcmp(ptExtension->pcExtensionName, gptExtRegistry->sbtExtensions[i].pcName) == 0)
+        if(strcmp(ptExtension->pcLibName, gptExtRegistry->sbtLibs[i].acPath) == 0)
             return;
     }
 
-    plExtensionInfo tExtensionInfo = {0};
-    tExtensionInfo.pcName = ptExtension->pcExtensionName;
+    plSharedLibrary tLibrary = {0};
 
-    if(pl_load_library(&tExtensionInfo.tLibrary, ptExtension->pcLibName, ptExtension->pcTransName, ptExtension->pcLockName))
+    if(pl_load_library(&tLibrary, ptExtension->pcLibName, ptExtension->pcTransName, ptExtension->pcLockName))
     {
         #ifdef _WIN32
-            tExtensionInfo.pl_load   = (void (__cdecl *)(plExtensionRegistry*, plExtension*, bool)) pl_load_library_function(&tExtensionInfo.tLibrary, ptExtension->pcLoadFunc);
-            tExtensionInfo.pl_unload = (void (__cdecl *)(plExtensionRegistry*, plExtension*))       pl_load_library_function(&tExtensionInfo.tLibrary, ptExtension->pcUnloadFunc);
+            ptExtension->pl_load   = (void (__cdecl *)(plDataRegistry*, plExtensionRegistry*, plExtension*, bool)) pl_load_library_function(&tLibrary, ptExtension->pcLoadFunc);
+            ptExtension->pl_unload = (void (__cdecl *)(plDataRegistry*, plExtensionRegistry*, plExtension*))       pl_load_library_function(&tLibrary, ptExtension->pcUnloadFunc);
         #else // linux
-            tExtensionInfo.pl_load   = (void (__attribute__(()) *)(plExtensionRegistry*, plExtension*, bool)) pl_load_library_function(&tExtensionInfo.tLibrary, ptExtension->pcLoadFunc);
-            tExtensionInfo.pl_unload = (void (__attribute__(()) *)(plExtensionRegistry*, plExtension*))       pl_load_library_function(&tExtensionInfo.tLibrary, ptExtension->pcUnloadFunc);
+            ptExtension.pl_load   = (void (__attribute__(()) *)(plExtensionRegistry*, plExtension*, bool)) pl_load_library_function(&tExtensionInfo.tLibrary, ptExtension->pcLoadFunc);
+            ptExtension.pl_unload = (void (__attribute__(()) *)(plExtensionRegistry*, plExtension*))       pl_load_library_function(&tExtensionInfo.tLibrary, ptExtension->pcUnloadFunc);
         #endif
 
-        PL_ASSERT(tExtensionInfo.pl_load);
-        PL_ASSERT(tExtensionInfo.pl_unload);
-
-        tExtensionInfo.pl_load(gptExtRegistry, ptExtension, false);
-        pl_sb_push(gptExtRegistry->sbtExtensions, tExtensionInfo);
+        PL_ASSERT(ptExtension->pl_load);
+        PL_ASSERT(ptExtension->pl_unload);
+        pl_sb_push(gptExtRegistry->sbtLibs, tLibrary);
+        ptExtension->pl_load(pl_get_data_registry(), gptExtRegistry, ptExtension, false);
+        pl_sb_push(gptExtRegistry->sbtExtensions, *ptExtension);
     }
     else
     {
@@ -218,10 +229,11 @@ pl_unload_extension(plExtension* ptExtension)
 
     for(uint32_t i = 0; i < pl_sb_size(gptExtRegistry->sbtExtensions); i++)
     {
-        if(strcmp(ptExtension->pcExtensionName, gptExtRegistry->sbtExtensions[i].pcName) == 0)
+        if(strcmp(ptExtension->pcExtensionName, gptExtRegistry->sbtExtensions[i].pcExtensionName) == 0)
         {
-            gptExtRegistry->sbtExtensions[i].pl_unload(gptExtRegistry, ptExtension);
+            gptExtRegistry->sbtExtensions[i].pl_unload(pl_get_data_registry(), gptExtRegistry, ptExtension);
             pl_sb_del_swap(gptExtRegistry->sbtExtensions, i);
+            pl_sb_del_swap(gptExtRegistry->sbtLibs, i);
             return;
         }
     }
@@ -232,6 +244,8 @@ pl_unload_extension(plExtension* ptExtension)
 void*
 pl_get_api(plExtension* ptExtension, const char* pcApiName)
 {
+    PL_ASSERT(gptExtRegistry && "global extension registry not set");
+
     for(uint32_t i = 0; i < ptExtension->uApiCount; i++)
     {
         if(strcmp(ptExtension->atApis[i].pcName, pcApiName) == 0)
@@ -243,5 +257,34 @@ pl_get_api(plExtension* ptExtension, const char* pcApiName)
     return NULL;
 }
 
+void
+pl_handle_extension_reloads(void)
+{
+    for(uint32_t i = 0; i < pl_sb_size(gptExtRegistry->sbtLibs); i++)
+    {
+        if(pl_has_library_changed(&gptExtRegistry->sbtLibs[i]))
+            pl_sb_push(gptExtRegistry->sbtHotLibs, &gptExtRegistry->sbtLibs[i]);
+    }
+
+    for(uint32_t i = 0; i < pl_sb_size(gptExtRegistry->sbtHotLibs); i++)
+    {
+       plSharedLibrary* ptLibrary = gptExtRegistry->sbtHotLibs[i];
+       plExtension* ptExtension = &gptExtRegistry->sbtExtensions[i];
+       pl_reload_library(ptLibrary);
+        #ifdef _WIN32
+            ptExtension->pl_load   = (void (__cdecl *)(plDataRegistry*, plExtensionRegistry*, plExtension*, bool)) pl_load_library_function(ptLibrary, ptExtension->pcLoadFunc);
+            ptExtension->pl_unload = (void (__cdecl *)(plDataRegistry*, plExtensionRegistry*, plExtension*))       pl_load_library_function(ptLibrary, ptExtension->pcUnloadFunc);
+        #else // linux
+            ptExtension.pl_load   = (void (__attribute__(()) *)(plExtensionRegistry*, plExtension*, bool)) pl_load_library_function(ptLibrary, ptExtension->pcLoadFunc);
+            ptExtension.pl_unload = (void (__attribute__(()) *)(plExtensionRegistry*, plExtension*))       pl_load_library_function(ptLibrary, ptExtension->pcUnloadFunc);
+        #endif
+
+        PL_ASSERT(ptExtension->pl_load);
+        PL_ASSERT(ptExtension->pl_unload);
+
+        ptExtension->pl_load(pl_get_data_registry(), gptExtRegistry, ptExtension, true);
+    }
+    pl_sb_reset(gptExtRegistry->sbtHotLibs);
+}
 
 #endif // PL_EXT_IMPLEMENTATION
