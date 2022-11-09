@@ -146,7 +146,7 @@
 
 @rem compile shaders
 @echo.
-@echo [1m[93mStep 0: shaders[0m
+@echo [1m[93mStep: shaders[0m
 @echo [1m[93m~~~~~~~~~~~~~~~[0m
 @echo [1m[36mCompiling...[0m
 @REM %VULKAN_SDK%/bin/glslc -o ../out/simple.frag.spv ./shaders/simple.frag
@@ -160,7 +160,7 @@
 
 @rem run compiler
 @echo.
-@echo [1m[93mStep 1: pilotlight.lib[0m
+@echo [1m[93mStep: pilotlight.lib[0m
 @echo [1m[93m~~~~~~~~~~~~~~~~~~~~~~[0m
 @echo [1m[36mCompiling...[0m
 cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% -c -permissive- %PL_SOURCES% -Fe..\out\pilotlight.lib -Fo..\out\

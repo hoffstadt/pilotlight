@@ -128,7 +128,7 @@ pl__sb_may_grow_(void** ptrBuffer, size_t szElementSize, size_t szNewItems, size
     if(*ptrBuffer)
     {   
         plSbHeader_* ptOriginalHeader = pl__sb_header(*ptrBuffer);
-        if(ptOriginalHeader->uSize + szElementSize > ptOriginalHeader->uCapacity)
+        if(ptOriginalHeader->uSize + szNewItems > ptOriginalHeader->uCapacity)
         {
             pl__sb_grow(ptrBuffer, szElementSize, szNewItems);
         }

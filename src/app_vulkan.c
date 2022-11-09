@@ -73,8 +73,8 @@ pl_app_load(plIOContext* ptIOCtx, plAppData* ptAppData)
         pl_set_extension_registry(&ptAppData->tExtensionRegistryCtx);
         pl_set_io_context(ptIOCtx);
 
-        plExtension* ptExtension = pl_get_extension("pl_draw_extension");
-        ptAppData->ptDrawExtApi = pl_get_api(ptExtension, "1");
+        plExtension* ptExtension = pl_get_extension(PL_EXT_DRAW);
+        ptAppData->ptDrawExtApi = pl_get_api(ptExtension, PL_EXT_API_DRAW);
 
         return ptAppData;
     }
@@ -109,8 +109,8 @@ pl_app_load(plIOContext* ptIOCtx, plAppData* ptAppData)
     pl_get_draw_extension_info(&tExtension);
     pl_load_extension(&tExtension);
 
-    plExtension* ptExtension = pl_get_extension("pl_draw_extension");
-    tPNewData->ptDrawExtApi = pl_get_api(ptExtension, "1");
+    plExtension* ptExtension = pl_get_extension(PL_EXT_DRAW);
+    tPNewData->ptDrawExtApi = pl_get_api(ptExtension, PL_EXT_API_DRAW);
 
     return tPNewData;
 }
@@ -222,12 +222,6 @@ pl_app_shutdown(plAppData* ptAppData)
     // ensure device is finished
     vkDeviceWaitIdle(ptAppData->device.tLogicalDevice);
 
-    // cleanup font atlas
-    pl_cleanup_font_atlas(&ptAppData->fontAtlas);
-
-    // cleanup drawing api
-    pl_cleanup_draw_context(&ptAppData->ctx);
-
     // destroy swapchain
     for (uint32_t i = 0u; i < ptAppData->swapchain.uImageCount; i++)
     {
@@ -239,16 +233,14 @@ pl_app_shutdown(plAppData* ptAppData)
     vkDestroyRenderPass(ptAppData->device.tLogicalDevice, ptAppData->graphics.tRenderPass, NULL);
     vkDestroySwapchainKHR(ptAppData->device.tLogicalDevice, ptAppData->swapchain.tSwapChain, NULL);
 
-    // cleanup graphics context
+    // clean up contexts
+    pl_cleanup_font_atlas(&ptAppData->fontAtlas);
+    pl_cleanup_draw_context(&ptAppData->ctx);
     pl_cleanup_graphics(&ptAppData->graphics, &ptAppData->device);
-
-    // cleanup profiling context
-    pl__cleanup_profile_context();
-
-    // cleanup logging context
+    pl_cleanup_profile_context();
+    pl_cleanup_extension_registry();
     pl_cleanup_log_context();
-
-    // cleanup memory context
+    pl_cleanup_data_registry();
     pl_cleanup_memory_context();
 }
 

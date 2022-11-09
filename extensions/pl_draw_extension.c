@@ -21,7 +21,7 @@ pl_load_draw_extension(plDataRegistry* ptDataRegistry, plExtensionRegistry* ptEx
     pl_set_data_registry(ptDataRegistry);
 
     gtDrawExtension.pl_add_text = pl_ext_add_text;
-    gatApis[0].pcName = "1";
+    gatApis[0].pcName = PL_EXT_API_DRAW;
     gatApis[0].pApi = &gtDrawExtension;
     ptExtension->atApis = gatApis;
 

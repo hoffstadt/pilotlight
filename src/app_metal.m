@@ -74,8 +74,8 @@ pl_app_load(plIOContext* ptIOCtx, plAppData* ptAppData)
         pl_set_extension_registry(&ptAppData->tExtensionRegistryCtx);
         pl_set_io_context(ptIOCtx);
 
-        plExtension* ptExtension = pl_get_extension("pl_draw_extension");
-        ptAppData->ptDrawExtApi = pl_get_api(ptExtension, "1");
+        plExtension* ptExtension = pl_get_extension(PL_EXT_DRAW);
+        ptAppData->ptDrawExtApi = pl_get_api(ptExtension, PL_EXT_API_DRAW);
 
         return ptAppData;
     }
@@ -111,8 +111,8 @@ pl_app_load(plIOContext* ptIOCtx, plAppData* ptAppData)
     pl_get_draw_extension_info(&tExtension);
     pl_load_extension(&tExtension);
 
-    plExtension* ptExtension = pl_get_extension("pl_draw_extension");
-    tPNewData->ptDrawExtApi = pl_get_api(ptExtension, "1");
+    plExtension* ptExtension = pl_get_extension(PL_EXT_DRAW);
+    tPNewData->ptDrawExtApi = pl_get_api(ptExtension, PL_EXT_API_DRAW);
 
     return tPNewData;
 }
@@ -164,12 +164,15 @@ pl_app_setup(plAppData* appData)
 PL_EXPORT void
 pl_app_shutdown(plAppData* appData)
 {
+
+    // clean up contexts
     pl_cleanup_font_atlas(&appData->fontAtlas);
     pl_cleanup_draw_context(&appData->ctx);
     pl_cleanup_profile_context();
+    pl_cleanup_extension_registry();
     pl_cleanup_log_context();
+    pl_cleanup_data_registry();
     pl_cleanup_memory_context();
-    pl_cleanup_io_context();
 }
 
 //-----------------------------------------------------------------------------
