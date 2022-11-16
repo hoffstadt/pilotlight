@@ -25,7 +25,8 @@
 :debug
 @set PL_HOT_RELOAD_STATUS=0
 @echo off
-@if not exist "../out" @mkdir "../out"2>nul (>>../out/pilot_light.exe echo off) && (@set PL_HOT_RELOAD_STATUS=0) || (@set PL_HOT_RELOAD_STATUS=1)
+@if not exist "../out" @mkdir "../out"
+2>nul (>>../out/pilot_light.exe echo off) && (@set PL_HOT_RELOAD_STATUS=0) || (@set PL_HOT_RELOAD_STATUS=1)
 @if %PL_HOT_RELOAD_STATUS% equ 1 (
     @echo.
     @echo [1m[97m[41m--------[42m HOT RELOADING [41m--------[0m
@@ -362,12 +363,12 @@ cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% %PL_SOURCES% -Fe"..
 @set PL_SOURCES=
 @set PL_SOURCES="pl_main_win32.c" %PL_SOURCES%
 
-@if %PL_HOT_RELOAD_STATUS% equ 1 ( goto Cleanuppilot_light )
-@rem run compiler
 @echo.
 @echo [1m[93mStep: pilot_light[0m
 @echo [1m[93m~~~~~~~~~~~~~~~~~~~~~~[0m
 @echo [1m[36mCompiling and Linking...[0m
+@if %PL_HOT_RELOAD_STATUS% equ 1 ( goto Cleanuppilot_light )
+@rem run compiler
 cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% %PL_SOURCES% -Fe"../out/pilot_light.exe" -Fo"../out/" -link %PL_LINKER_FLAGS% %PL_LINK_DIRECTORIES% %PL_LINK_LIBRARIES%
 
 @rem check build status
@@ -394,7 +395,8 @@ goto ExitLabel
 :debugdx11
 @set PL_HOT_RELOAD_STATUS=0
 @echo off
-@if not exist "../out" @mkdir "../out"2>nul (>>../out/pilot_light.exe echo off) && (@set PL_HOT_RELOAD_STATUS=0) || (@set PL_HOT_RELOAD_STATUS=1)
+@if not exist "../out" @mkdir "../out"
+2>nul (>>../out/pilot_light.exe echo off) && (@set PL_HOT_RELOAD_STATUS=0) || (@set PL_HOT_RELOAD_STATUS=1)
 @if %PL_HOT_RELOAD_STATUS% equ 1 (
     @echo.
     @echo [1m[97m[41m--------[42m HOT RELOADING [41m--------[0m
@@ -722,12 +724,12 @@ cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% %PL_SOURCES% -Fe"..
 @set PL_SOURCES=
 @set PL_SOURCES="pl_main_win32.c" %PL_SOURCES%
 
-@if %PL_HOT_RELOAD_STATUS% equ 1 ( goto Cleanuppilot_light )
-@rem run compiler
 @echo.
 @echo [1m[93mStep: pilot_light[0m
 @echo [1m[93m~~~~~~~~~~~~~~~~~~~~~~[0m
 @echo [1m[36mCompiling and Linking...[0m
+@if %PL_HOT_RELOAD_STATUS% equ 1 ( goto Cleanuppilot_light )
+@rem run compiler
 cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% %PL_SOURCES% -Fe"../out/pilot_light.exe" -Fo"../out/" -link %PL_LINKER_FLAGS% %PL_LINK_DIRECTORIES% %PL_LINK_LIBRARIES%
 
 @rem check build status
