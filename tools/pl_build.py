@@ -295,7 +295,7 @@ def generate_macos_build():
             buffer += 'DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )\n\n'
             buffer += '@rem make current directory the same as this script\n'
             buffer += 'pushd $DIR >/dev/null\n'
-            buffer += _comment('get platform & architecture', file_type)
+            buffer += '@rem get platform & architecture\n'
             buffer += 'PLAT="$(uname)"\n'
             buffer += 'ARCH="$(uname -m)"\n'
 

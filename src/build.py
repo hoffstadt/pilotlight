@@ -17,7 +17,6 @@ with pl.project("pilotlight") as pilotlight:
     def msvc_project_commons():
         pl.add_include_directories('%WindowsSdkDir%Include\\um', '%WindowsSdkDir%Include\\shared', '%DXSDK_DIR%Include', "%VULKAN_SDK%\\Include")
         pl.add_compiler_flags("-Zc:preprocessor", "-nologo", "-std:c11", "-W4", "-WX", "-wd4201", "-wd4100", "-wd4996", "-wd4505", "-wd4189", "-wd5105", "-wd4115", "-permissive-")
-        pl.add_definition("PL_VULKAN_BACKEND")
         pl.add_link_directory('%VULKAN_SDK%\\Lib')
 
     def gcc_project_commons():
@@ -55,7 +54,8 @@ with pl.project("pilotlight") as pilotlight:
                 msvc_project_commons()
                 project_commons()
                 config_commons()
-                pl.add_definition("_DEBUG")  
+                pl.add_definition("_DEBUG")
+                pl.add_definition("PL_VULKAN_BACKEND")
                 pl.add_compiler_flags("-Od", "-MDd", "-Zi")
             with pl.compiler("gcc", pl.Compiler.GCC):
                 project_commons()
@@ -71,7 +71,8 @@ with pl.project("pilotlight") as pilotlight:
                 msvc_project_commons()
                 project_commons()
                 config_commons()
-                pl.add_compiler_flags("-O2", "-MD")
+                pl.add_compiler_flags("-Od", "-MDd", "-Zi")
+                pl.add_definition("PL_DX11_BACKEND")
 
     ###############################################################################
     #                                 pl_draw_extension                           #
@@ -94,7 +95,7 @@ with pl.project("pilotlight") as pilotlight:
                 msvc_project_commons()
                 project_commons()
                 config_commons()
-                
+                pl.add_definition("PL_VULKAN_BACKEND")      
             with pl.compiler("gcc", pl.Compiler.GCC):
                 project_commons()
                 gcc_project_commons()
@@ -112,7 +113,7 @@ with pl.project("pilotlight") as pilotlight:
                 msvc_project_commons()
                 project_commons()
                 config_commons()
-                pl.add_compiler_flags("-O2", "-MD")
+                pl.add_definition("PL_DX11_BACKEND")
 
     ###############################################################################
     #                                    app                                      #
@@ -134,6 +135,7 @@ with pl.project("pilotlight") as pilotlight:
                 project_commons()
                 config_commons()
                 pl.add_source_file("app_vulkan.c")
+                pl.add_definition("PL_VULKAN_BACKEND")
             with pl.compiler("gcc", pl.Compiler.GCC):
                 project_commons()
                 gcc_project_commons()
@@ -154,6 +156,7 @@ with pl.project("pilotlight") as pilotlight:
                 project_commons()
                 config_commons()
                 pl.add_source_file("app_dx11.c")
+                pl.add_definition("PL_DX11_BACKEND")
 
     ###############################################################################
     #                                 pilot_light                                 #
@@ -176,6 +179,7 @@ with pl.project("pilotlight") as pilotlight:
                 project_commons()
                 config_commons()
                 pl.add_definition("_DEBUG")
+                pl.add_definition("PL_VULKAN_BACKEND")
             with pl.compiler("gcc", pl.Compiler.GCC):
                 project_commons()
                 gcc_project_commons()
@@ -195,6 +199,7 @@ with pl.project("pilotlight") as pilotlight:
                 msvc_config_commons()
                 project_commons()
                 config_commons()
+                pl.add_definition("PL_DX11_BACKEND")
            
 pl.generate_msvc_build()
 pl.generate_linux_build()
