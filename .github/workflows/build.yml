@@ -43,11 +43,11 @@ jobs:
         call build.bat -c debug
         if not exist ../out/pilot_light.exe exit 1
         if not exist ../out/app.dll exit 1
-        if not exist ../out/pilotlight.c.lib exit 1
+        if not exist ../out/pilotlight.lib exit 1
         call build.bat -c debugdx11
         if not exist ../out/pilot_light.exe exit 1
         if not exist ../out/app.dll exit 1
-        if not exist ../out/pilotlight.c.lib exit 1
+        if not exist ../out/pilotlight.lib exit 1
 
   MacOS:
     
