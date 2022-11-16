@@ -285,7 +285,7 @@ def generate_macos_build():
             buffer += "YELLOW=$'\e[0;33m'\n"
             buffer += "WHITE=$'\e[0;97m'\n"
             buffer += "NC=$'\e[0m'\n\n"
-            buffer += '@rem find directory of this script\n'
+            buffer += '# find directory of this script\n'
             buffer += "SOURCE=${BASH_SOURCE[0]}\n"
             buffer += 'while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink\n'
             buffer += '  DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )\n'
@@ -293,9 +293,9 @@ def generate_macos_build():
             buffer += '  [[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located\n'
             buffer += 'done\n'
             buffer += 'DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )\n\n'
-            buffer += '@rem make current directory the same as this script\n'
+            buffer += '# make current directory the same as this script\n'
             buffer += 'pushd $DIR >/dev/null\n'
-            buffer += '@rem get platform & architecture\n'
+            buffer += '# get platform & architecture\n'
             buffer += 'PLAT="$(uname)"\n'
             buffer += 'ARCH="$(uname -m)"\n'
 
@@ -455,23 +455,20 @@ def generate_macos_build():
                                         for source in settings._source_files:
                                             buffer += 'PL_SOURCES+=" ' + source + '"\n'
 
-                                        buffer += _new_lines(1)
-                                        buffer += "echo\n"
+                                        buffer += "\necho\n"
                                         buffer += 'echo ${YELLOW}Step: ' + target._name +'${NC}\n'
                                         buffer += 'echo ${YELLOW}~~~~~~~~~~~~~~~~~~~${NC}\n'
                                         buffer += 'echo ${CYAN}Compiling and Linking...${NC}\n'
                                         buffer += 'clang -fPIC $PL_SOURCES $PL_INCLUDE_DIRECTORIES $PL_DEFINES $PL_COMPILER_FLAGS $PL_INCLUDE_DIRECTORIES $PL_LINK_DIRECTORIES $PL_LINKER_FLAGS $PL_LINK_LIBRARIES -o "./' + settings._output_directory + '/' + settings._output_binary + settings._output_binary_extension +'"\n'
 
-                                        buffer += _new_lines(1)
-                                        buffer += _comment("check build status", file_type)
+                                        buffer += "\n# check build status\n"
                                         buffer += "if [ $? -ne 0 ]\n"
                                         buffer += "then\n"
                                         buffer += "    PL_RESULT=${BOLD}${RED}Failed.${NC}\n"
                                         buffer += "fi\n"
                                         buffer += "echo ${CYAN}Results: ${NC} ${PL_RESULT}\n"
                                         buffer += "echo ${CYAN}~~~~~~~~~~~~~~~~~~~~~~${NC}\n"
-                                        buffer += 'rm "./' + settings._output_directory + '/' + target._lock_file + '"'
-                                        buffer += _new_lines(2)
+                                        buffer += 'rm "./' + settings._output_directory + '/' + target._lock_file + '"\n\n'
 
             buffer += 'fi\n'     
             buffer += 'popd >/dev/null'
@@ -487,8 +484,7 @@ def generate_linux_build():
         file_type = FileType.BASH
 
         with open(filepath, "w") as file:
-            buffer = "#!/bin/bash"
-            buffer += _new_lines(2)
+            buffer = "#!/bin/bash\n\n"
             buffer += "# colors\n"
             buffer += "BOLD=$'\e[0;1m'\n"
             buffer += "RED=$'\e[0;31m'\n"
@@ -499,20 +495,18 @@ def generate_linux_build():
             buffer += "MAGENTA=$'\e[0;35m'\n"
             buffer += "YELLOW=$'\e[0;33m'\n"
             buffer += "WHITE=$'\e[0;97m'\n"
-            buffer += "NC=$'\e[0m'\n"
-            buffer += _new_lines(2)
-            buffer += _comment('find directory of this script', file_type)
+            buffer += "NC=$'\e[0m'\n\n"
+            buffer += '# find directory of this script\n'
             buffer += "SOURCE=${BASH_SOURCE[0]}\n"
             buffer += 'while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink\n'
             buffer += '  DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )\n'
             buffer += '  SOURCE=$(readlink "$SOURCE")\n'
             buffer += '  [[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located\n'
             buffer += 'done\n'
-            buffer += 'DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )\n'
-            buffer += _new_lines(2)
-            buffer += _comment('make current directory the same as this script', file_type)
+            buffer += 'DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )\n\n'
+            buffer += '# make current directory the same as this script\n'
             buffer += 'pushd $DIR >/dev/null\n'
-            buffer += _comment('get platform & architecture', file_type)
+            buffer += '# get platform & architecture\n'
             buffer += 'PLAT="$(uname)"\n'
             buffer += 'ARCH="$(uname -m)"\n'
 
@@ -530,7 +524,6 @@ def generate_linux_build():
             buffer += _new_lines(2)
             for register_config in project._registered_configurations:
                 
-
                 # find main target
                 target_found = False        
                 for target in project._targets:
@@ -576,46 +569,38 @@ def generate_linux_build():
                                 if settings._compiler_type == Compiler.GCC:
 
                                     buffer += _title(config._name + " | " + target._name, file_type)
-                                    buffer += _new_lines(1)
-                                    buffer += _comment('create output directory', file_type)
+                                    buffer += '\n# create output directory\n'
                                     buffer += 'if ! [[ -d "' + settings._output_directory + '" ]]; then\n'
                                     buffer += '    mkdir "' + settings._output_directory + '"\n'
                                     buffer += 'fi\n'
-                                    buffer += 'echo LOCKING > "./' + settings._output_directory + '/' + target._lock_file + '"'
-                                    buffer += _new_lines(2)
+                                    buffer += 'echo LOCKING > "./' + settings._output_directory + '/' + target._lock_file + '"\n\n'
 
                                     buffer += 'PL_DEFINES=\n'    
                                     for define in settings._definitions:
                                         buffer += 'PL_DEFINES+=" -D' + define + '"\n'
-                                    buffer += _new_lines(1)
 
-                                    buffer += 'PL_INCLUDE_DIRECTORIES=\n'    
+                                    buffer += '\nPL_INCLUDE_DIRECTORIES=\n'    
                                     for include in settings._include_directories:
                                         buffer += 'PL_INCLUDE_DIRECTORIES+=" -I' + include + '"\n'
-                                    buffer += _new_lines(1)
 
-                                    buffer += 'PL_LINK_DIRECTORIES=\n'    
+                                    buffer += '\nPL_LINK_DIRECTORIES=\n'    
                                     for link in settings._link_directories:
                                         buffer += 'PL_LINK_DIRECTORIES+=" -L' + link + '"\n'
                                     buffer += _new_lines(1)
 
-                                    buffer += 'PL_COMPILER_FLAGS=\n'    
+                                    buffer += '\nPL_COMPILER_FLAGS=\n'    
                                     for flag in settings._compiler_flags:
                                         buffer += 'PL_COMPILER_FLAGS+=" ' + flag + '"\n'
-                                    buffer += _new_lines(1)
 
-                                    buffer += 'PL_LINKER_FLAGS=\n'    
+                                    buffer += '\nPL_LINKER_FLAGS=\n'    
                                     for flag in settings._linker_flags:
                                         buffer += 'PL_LINKER_FLAGS+=" -l' + flag + '"\n'
-                                    buffer += _new_lines(1)
 
-                                    buffer += 'PL_LINK_LIBRARIES=\n'    
+                                    buffer += '\nPL_LINK_LIBRARIES=\n'    
                                     for link in settings._link_libraries:
                                         buffer += 'PL_LINK_LIBRARIES+=" -l' + link + '"\n'
-                                    buffer += _new_lines(1)
-                                    buffer += "PL_RESULT=${BOLD}${GREEN}Successful.${NC}"
-                                    buffer += _new_lines(1)
-
+                                    buffer += "\nPL_RESULT=${BOLD}${GREEN}Successful.${NC}\n"
+                                    
                                     if target._target_type == TargetType.STATIC_LIBRARY:
         
                                         buffer += "echo\n"
@@ -626,40 +611,36 @@ def generate_linux_build():
                                         for source in settings._source_files:
                                             buffer += 'gcc -c -fPIC $PL_INCLUDE_DIRECTORIES $PL_DEFINES $PL_COMPILER_FLAGS ' + source + ' -o "./' + settings._output_directory + '/' + source + '.o"\n'
 
-                                        buffer += _new_lines(1)
-                                        buffer += _comment("check build status", file_type)
+                                        buffer += "\n# check build status\n"
                                         buffer += "if [ $? -ne 0 ]\n"
                                         buffer += "then\n"
                                         buffer += "    PL_RESULT=${BOLD}${RED}Failed.${NC}\n"
                                         buffer += "fi\n"
                                         buffer += "echo ${CYAN}Results: ${NC} ${PL_RESULT}\n"
                                         buffer += "echo ${CYAN}~~~~~~~~~~~~~~~~~~~~~~${NC}\n"
-                                        buffer += 'rm "./' + settings._output_directory + '/' + target._lock_file + '"'
-                                        buffer += _new_lines(2)
+                                        buffer += 'rm "./' + settings._output_directory + '/' + target._lock_file + '"\n\n'
 
                                     elif target._target_type == TargetType.DYNAMIC_LIBRARY:
 
                                         buffer += 'PL_SOURCES=\n'    
                                         for source in settings._source_files:
                                             buffer += 'PL_SOURCES+=" ' + source + '"\n'
-                                        buffer += _new_lines(1)
 
-                                        buffer += "echo\n"
+                                        buffer += "\necho\n"
                                         buffer += 'echo ${YELLOW}Step: ' + target._name +'${NC}\n'
                                         buffer += 'echo ${YELLOW}~~~~~~~~~~~~~~~~~~~${NC}\n'
                                         buffer += 'echo ${CYAN}Compiling and Linking...${NC}\n'
                                         buffer += 'gcc -shared -fPIC $PL_SOURCES $PL_INCLUDE_DIRECTORIES $PL_DEFINES $PL_COMPILER_FLAGS $PL_INCLUDE_DIRECTORIES $PL_LINK_DIRECTORIES $PL_LINKER_FLAGS $PL_LINK_LIBRARIES -o "./' + settings._output_directory + '/' + settings._output_binary + settings._output_binary_extension +'"\n'
 
                                         buffer += _new_lines(1)
-                                        buffer += _comment("check build status", file_type)
+                                        buffer += "# check build status\n"
                                         buffer += "if [ $? -ne 0 ]\n"
                                         buffer += "then\n"
                                         buffer += "    PL_RESULT=${BOLD}${RED}Failed.${NC}\n"
                                         buffer += "fi\n"
                                         buffer += "echo ${CYAN}Results: ${NC} ${PL_RESULT}\n"
                                         buffer += "echo ${CYAN}~~~~~~~~~~~~~~~~~~~~~~${NC}\n"
-                                        buffer += 'rm "./' + settings._output_directory + '/' + target._lock_file + '"'
-                                        buffer += _new_lines(2)
+                                        buffer += 'rm "./' + settings._output_directory + '/' + target._lock_file + '"\n\n'
 
                                     elif target._target_type == TargetType.EXECUTABLE:
 
@@ -667,23 +648,20 @@ def generate_linux_build():
                                         for source in settings._source_files:
                                             buffer += 'PL_SOURCES+=" ' + source + '"\n'
 
-                                        buffer += _new_lines(1)
-                                        buffer += "echo\n"
+                                        buffer += "\necho\n"
                                         buffer += 'echo ${YELLOW}Step: ' + target._name +'${NC}\n'
                                         buffer += 'echo ${YELLOW}~~~~~~~~~~~~~~~~~~~${NC}\n'
                                         buffer += 'echo ${CYAN}Compiling and Linking...${NC}\n'
                                         buffer += 'gcc -fPIC $PL_SOURCES $PL_INCLUDE_DIRECTORIES $PL_DEFINES $PL_COMPILER_FLAGS $PL_INCLUDE_DIRECTORIES $PL_LINK_DIRECTORIES $PL_LINKER_FLAGS $PL_LINK_LIBRARIES -o "./' + settings._output_directory + '/' + settings._output_binary + settings._output_binary_extension +'"\n'
 
-                                        buffer += _new_lines(1)
-                                        buffer += _comment("check build status", file_type)
+                                        buffer += "\n# check build status\n"
                                         buffer += "if [ $? -ne 0 ]\n"
                                         buffer += "then\n"
                                         buffer += "    PL_RESULT=${BOLD}${RED}Failed.${NC}\n"
                                         buffer += "fi\n"
                                         buffer += "echo ${CYAN}Results: ${NC} ${PL_RESULT}\n"
                                         buffer += "echo ${CYAN}~~~~~~~~~~~~~~~~~~~~~~${NC}\n"
-                                        buffer += 'rm "./' + settings._output_directory + '/' + target._lock_file + '"'
-                                        buffer += _new_lines(2)
+                                        buffer += 'rm "./' + settings._output_directory + '/' + target._lock_file + '"\n'
 
             buffer += 'fi\n'
             buffer += 'popd >/dev/null'
@@ -700,13 +678,11 @@ def generate_msvc_build():
 
         with open(filepath, "w") as file:
             buffer = ""
-            buffer += _comment('do NOT keep changes to environment variables', file_type)
-            buffer += '@setlocal'
-            buffer += _new_lines(2)
+            buffer += '@rem do NOT keep changes to environment variables\n'
+            buffer += '@setlocal\n\n'
             buffer += '@pushd %~dp0\n'
-            buffer += '@set dir=%~dp0'
-            buffer += _new_lines(2)
-            buffer += _comment('setup development environment', file_type)
+            buffer += '@set dir=%~dp0\n\n'
+            buffer += '@rem setup development environment\n'
             buffer += '@set PL_RESULT=[1m[92mSuccessful.[0m\n'
             buffer += '@set PATH=C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build;%PATH%\n'
             buffer += '@set PATH=C:\\Program Files\\Microsoft Visual Studio\\2019\\Community\\VC\\Auxiliary\\Build;%PATH%\n'
@@ -779,7 +755,7 @@ def generate_msvc_build():
 
                                 if settings._compiler_type == Compiler.MSVC:
 
-                                    buffer += _comment('create output directory', file_type)
+                                    buffer += '@rem create output directory\n'
                                     buffer += '@if not exist "' + settings._output_directory + '" @mkdir "' + settings._output_directory + '"'
                                     buffer += _new_lines(2)
 
@@ -818,7 +794,7 @@ def generate_msvc_build():
 
                                     if target._target_type == TargetType.STATIC_LIBRARY:
         
-                                        buffer += _comment('run compiler', file_type)
+                                        buffer += '@rem run compiler\n'
                                         buffer += "@echo.\n"
                                         buffer += '@echo [1m[93mStep: ' + target._name +'[0m\n'
                                         buffer += '@echo [1m[93m~~~~~~~~~~~~~~~~~~~~~~[0m\n'
@@ -829,7 +805,7 @@ def generate_msvc_build():
                                             buffer += _new_lines(1)
 
                                         buffer += _new_lines(1)
-                                        buffer += _comment("check build status", file_type)
+                                        buffer += "@rem check build status\n"
                                         buffer += "@set PL_BUILD_STATUS=%ERRORLEVEL%\n"
                                         buffer += "@if %PL_BUILD_STATUS% NEQ 0 (\n"
                                         buffer += "    @echo [1m[91mCompilation Failed with error code[0m: %PL_BUILD_STATUS%\n"
@@ -838,7 +814,7 @@ def generate_msvc_build():
                                         buffer += ")\n"
 
                                         buffer += _new_lines(1)
-                                        buffer += _comment('link object files into a shared lib', file_type)
+                                        buffer += '@rem link object files into a shared lib\n'
                                         buffer += "@echo [1m[36mLinking...[0m\n"
                                         buffer += 'lib -nologo -OUT:"' + settings._output_directory + '/' + settings._output_binary + settings._output_binary_extension + '" "' + settings._output_directory + '/*.obj"'
                                         buffer += _new_lines(2)
@@ -853,7 +829,7 @@ def generate_msvc_build():
                                             buffer += '@set PL_SOURCES="' + source + '" %PL_SOURCES%\n'
                                         buffer += _new_lines(1)
 
-                                        buffer += _comment('run compiler', file_type)
+                                        buffer += '@rem run compiler\n'
                                         buffer += "@echo.\n"
                                         buffer += '@echo [1m[93mStep: ' + target._name +'[0m\n'
                                         buffer += '@echo [1m[93m~~~~~~~~~~~~~~~~~~~~~~[0m\n'
@@ -862,7 +838,7 @@ def generate_msvc_build():
                                         buffer += _new_lines(1)
 
                                         buffer += _new_lines(1)
-                                        buffer += _comment("check build status", file_type)
+                                        buffer += "@rem check build status\n"
                                         buffer += "@set PL_BUILD_STATUS=%ERRORLEVEL%\n"
                                         buffer += "@if %PL_BUILD_STATUS% NEQ 0 (\n"
                                         buffer += "    @echo [1m[91mCompilation Failed with error code[0m: %PL_BUILD_STATUS%\n"
@@ -888,12 +864,12 @@ def generate_msvc_build():
                                         buffer += '@echo [1m[93m~~~~~~~~~~~~~~~~~~~~~~[0m\n'
                                         buffer += '@echo [1m[36mCompiling and Linking...[0m\n'
                                         buffer += '@if %PL_HOT_RELOAD_STATUS% equ 1 ( goto ' + 'Cleanup' + target._name + ' )\n'   
-                                        buffer += _comment('run compiler', file_type)
+                                        buffer += '@rem run compiler\n'
                                         buffer += 'cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% %PL_SOURCES% -Fe"' + settings._output_directory + '/' + settings._output_binary + settings._output_binary_extension + '" -Fo"' + settings._output_directory + '/" -link %PL_LINKER_FLAGS% %PL_LINK_DIRECTORIES% %PL_LINK_LIBRARIES%'
                                         buffer += _new_lines(1)
 
                                         buffer += _new_lines(1)
-                                        buffer += _comment("check build status", file_type)
+                                        buffer += "@rem check build status\n"
                                         buffer += "@set PL_BUILD_STATUS=%ERRORLEVEL%\n"
                                         buffer += "@if %PL_BUILD_STATUS% NEQ 0 (\n"
                                         buffer += "    @echo [1m[91mCompilation Failed with error code[0m: %PL_BUILD_STATUS%\n"
