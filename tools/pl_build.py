@@ -741,6 +741,7 @@ def generate_msvc_build():
                                         buffer += ":" + register_config + "\n"
                                         buffer += "@set PL_HOT_RELOAD_STATUS=0\n"
                                         buffer += "@echo off\n"
+                                        buffer += '@if not exist "' + settings._output_directory + '" @mkdir "' + settings._output_directory + '"'
                                         buffer += '2>nul (>>' + settings._output_directory + '/' + settings._output_binary + settings._output_binary_extension + ' echo off) && (@set PL_HOT_RELOAD_STATUS=0) || (@set PL_HOT_RELOAD_STATUS=1)\n'
                                         buffer += "@if %PL_HOT_RELOAD_STATUS% equ 1 (\n"
                                         buffer += "    @echo.\n"
