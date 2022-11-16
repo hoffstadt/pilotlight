@@ -25,7 +25,7 @@
 :debug
 @set PL_HOT_RELOAD_STATUS=0
 @echo off
-2>nul (>>../out/pilot_light.exe echo off) && (@set PL_HOT_RELOAD_STATUS=0) || (@set PL_HOT_RELOAD_STATUS=1)
+@if not exist "../out" @mkdir "../out"2>nul (>>../out/pilot_light.exe echo off) && (@set PL_HOT_RELOAD_STATUS=0) || (@set PL_HOT_RELOAD_STATUS=1)
 @if %PL_HOT_RELOAD_STATUS% equ 1 (
     @echo.
     @echo [1m[97m[41m--------[42m HOT RELOADING [41m--------[0m
@@ -394,7 +394,7 @@ goto ExitLabel
 :debugdx11
 @set PL_HOT_RELOAD_STATUS=0
 @echo off
-2>nul (>>../out/pilot_light.exe echo off) && (@set PL_HOT_RELOAD_STATUS=0) || (@set PL_HOT_RELOAD_STATUS=1)
+@if not exist "../out" @mkdir "../out"2>nul (>>../out/pilot_light.exe echo off) && (@set PL_HOT_RELOAD_STATUS=0) || (@set PL_HOT_RELOAD_STATUS=1)
 @if %PL_HOT_RELOAD_STATUS% equ 1 (
     @echo.
     @echo [1m[97m[41m--------[42m HOT RELOADING [41m--------[0m
