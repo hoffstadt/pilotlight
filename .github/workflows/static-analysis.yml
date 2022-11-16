@@ -51,8 +51,9 @@ jobs:
             exit 0
           fi
           cd src
-          chmod +x build.sh
-          pvs-studio-analyzer trace -- ./build.sh
+          python3 build.py
+          chmod +x build_linux.sh
+          pvs-studio-analyzer trace -- ./build_linux.sh
           pvs-studio-analyzer analyze -e ../dependencies -l ../pvs-studio.lic -o ../pvs-studio.log --disableLicenseExpirationCheck
           pvs-studio-analyzer suppress -v572 -v575 -v595 ../pvs-studio.log
           pvs-studio-analyzer filter-suppressed ../pvs-studio.log

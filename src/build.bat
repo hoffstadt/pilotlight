@@ -1,286 +1,755 @@
-@if [%1]==[] @goto Run
-@goto Run
+@rem do NOT keep changes to environment variables
+@setlocal
 
-@rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-@rem |                            Help Message                                |
-@rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-:Usage
-@echo.
-@echo.[flags and arguments]
-@echo.
-@echo.Available flags:
-@echo.  -h  Display this help message
-@echo.
-@echo.Available arguments:
-@echo.  -g dx11 ^| vulkan ^|
-@echo.     Set graphics backend (default: vulkan)
-@exit /b 127
-
-:Run
-
-@rem without this, PATH will not reset when called within same session
-@setlocal 
-
-@rem make current directory the same as batch file
-@pushd %~dp0 
+@pushd %~dp0
 @set dir=%~dp0
 
-@rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-@rem |                            Command Line                                |
-@rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-@rem default backend to vulkan
-@set PL_BACKEND=vulkan
-
-:CheckOpts
-@if "%~1"=="-h" @goto Usage
-@if "%~1"=="-i" @goto PrintInfo
-@if "%~1"=="-g" (@set PL_BACKEND=%2) & @shift & @shift & @goto CheckOpts
-
-@rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-@rem |                            Setup                                       |
-@rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-@rem create output directory
-@if not exist ..\out @mkdir ..\out
-
-@rem cleanup temp files
-@del ..\out\*.pdb > NUL 2> NUL
-@del ..\out\*.log > NUL 2> NUL
-
-@echo LOCKING > ..\out\lock.tmp
-@echo LOCKING > ..\out\pl_draw_extension_lock.tmp
-
-@rem check if hot reloading
-@set PL_HOT_RELOADING_STATUS=0
-@echo off
-2>nul (>>..\out\pilot_light.exe echo off) && (@set PL_HOT_RELOADING_STATUS=0) || (@set PL_HOT_RELOADING_STATUS=1)
-
-@if %PL_HOT_RELOADING_STATUS% equ 1 (
-    @echo. 
-    @echo [1m[97m[41m--------[42m HOT RELOADING [41m--------[0m
-)
-
-@if %PL_HOT_RELOADING_STATUS% equ 0 (
-    @if exist ..\out\pl_draw_extension_*.dll del ..\out\pl_draw_extension_*.dll
-    @if exist ..\out\pl_draw_extension_*.pdb del ..\out\pl_draw_extension_*.pdb
-    @if exist ..\out\pl_draw_extension.dll del ..\out\pl_draw_extension.dll
-    @if exist ..\out\app.dll del ..\out\app.dll
-    @if exist ..\out\app_*.dll del ..\out\app_*.dll
-    @if exist ..\out\app_*.pdb del ..\out\app_*.pdb
-)
-
-@rem -------------------Setup development environment--------------------------
+@rem setup development environment
+@set PL_RESULT=[1m[92mSuccessful.[0m
 @set PATH=C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build;%PATH%
 @set PATH=C:\Program Files\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build;%PATH%
 @set PATH=C:\Program Files (x86)\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build;%PATH%
 @set PATH=C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build;%PATH%
-@set PATH=C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build;%PATH%
-@set PATH=%dir%..\out;%PATH%
+@set PATH=C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise/VC\Auxiliary\Build;%PATH%
 
-@rem setup environment for msvc
 @call vcvarsall.bat amd64 > nul
 
-@rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-@rem |                          Common Settings                               |
-@rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-@rem build config: Debug or Release
 @set PL_CONFIG=Debug
+:CheckOpts
+@if "%~1"=="-c" (@set PL_CONFIG=%2) & @shift & @shift & @goto CheckOpts
 
-@rem include directories
-@set PL_INCLUDE_DIRECTORIES=-I"%WindowsSdkDir%Include\um" 
+@if "%PL_CONFIG%" equ "debug" ( goto debug )
+@if "%PL_CONFIG%" equ "debugdx11" ( goto debugdx11 )
+
+
+:debug
+@set PL_HOT_RELOAD_STATUS=0
+@echo off
+2>nul (>>../out/pilot_light.exe echo off) && (@set PL_HOT_RELOAD_STATUS=0) || (@set PL_HOT_RELOAD_STATUS=1)
+@if %PL_HOT_RELOAD_STATUS% equ 1 (
+    @echo.
+    @echo [1m[97m[41m--------[42m HOT RELOADING [41m--------[0m
+)
+
+
+@if %PL_HOT_RELOAD_STATUS% equ 0 (
+    @echo.
+    @if exist "../out/pilotlight.lib" del "../out/pilotlight.lib"
+    @if exist "../out/pl_draw_extension.dll" del "../out/pl_draw_extension.dll"
+    @if exist "../out/pl_draw_extension_*.dll" del "../out/pl_draw_extension_*.dll"
+    @if exist "../out/pl_draw_extension_*.pdb" del "../out/pl_draw_extension_*.pdb"
+    @if exist "../out/pl_draw_extension_*.so" del "../out/pl_draw_extension_*.so"
+    @if exist "../out/pl_draw_extension_*.pdb" del "../out/pl_draw_extension_*.pdb"
+    @if exist "../out/pl_draw_extension_*.so" del "../out/pl_draw_extension_*.so"
+    @if exist "../out/pl_draw_extension_*.pdb" del "../out/pl_draw_extension_*.pdb"
+    @if exist "../out/app.dll" del "../out/app.dll"
+    @if exist "../out/app_*.dll" del "../out/app_*.dll"
+    @if exist "../out/app_*.pdb" del "../out/app_*.pdb"
+    @if exist "../out/app_*.so" del "../out/app_*.so"
+    @if exist "../out/app_*.pdb" del "../out/app_*.pdb"
+    @if exist "../out/app_*.so" del "../out/app_*.so"
+    @if exist "../out/app_*.pdb" del "../out/app_*.pdb"
+    @if exist "../out/pilot_light.exe" del "../out/pilot_light.exe"
+)
+
+@rem ################################################################################
+@rem #                                debug | pl_lib                                #
+@rem ################################################################################
+
+@rem create output directory
+@if not exist "../out" @mkdir "../out"
+
+@echo LOCKING > "../out/lock.tmp"
+
+@set PL_DEFINES=
+@set PL_DEFINES=-DPL_VULKAN_BACKEND %PL_DEFINES%
+@set PL_DEFINES=-D_USE_MATH_DEFINES %PL_DEFINES%
+@set PL_DEFINES=-DPL_PROFILING_ON %PL_DEFINES%
+@set PL_DEFINES=-DPL_ALLOW_HOT_RELOAD %PL_DEFINES%
+@set PL_DEFINES=-DPL_ENABLE_VALIDATION_LAYERS %PL_DEFINES%
+@set PL_DEFINES=-D_DEBUG %PL_DEFINES%
+
+@set PL_INCLUDE_DIRECTORIES=
+@set PL_INCLUDE_DIRECTORIES=-I"%WindowsSdkDir%Include\um" %PL_INCLUDE_DIRECTORIES%
 @set PL_INCLUDE_DIRECTORIES=-I"%WindowsSdkDir%Include\shared" %PL_INCLUDE_DIRECTORIES%
-@set PL_INCLUDE_DIRECTORIES=-I"%DXSDK_DIR%Include"            %PL_INCLUDE_DIRECTORIES%
-@set PL_INCLUDE_DIRECTORIES=-I%VULKAN_SDK%/Include            %PL_INCLUDE_DIRECTORIES%
-@set PL_INCLUDE_DIRECTORIES=-I..\dependencies\stb             %PL_INCLUDE_DIRECTORIES%
-@set PL_INCLUDE_DIRECTORIES=-I..\src                          %PL_INCLUDE_DIRECTORIES%
-@set PL_INCLUDE_DIRECTORIES=-I..\extensions                   %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%DXSDK_DIR%Include" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%VULKAN_SDK%\Include" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../out" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../dependencies/stb" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../src" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../extensions" %PL_INCLUDE_DIRECTORIES%
 
-@rem link directories
-@set PL_LINK_DIRECTORIES=-LIBPATH:"%VULKAN_SDK%\Lib" -LIBPATH:"..\out"
+@set PL_LINK_DIRECTORIES=
+@set PL_LINK_DIRECTORIES=-LIBPATH:"%VULKAN_SDK%\Lib" %PL_LINK_DIRECTORIES%
+@set PL_LINK_DIRECTORIES=-LIBPATH:"../out" %PL_LINK_DIRECTORIES%
 
-@rem common defines
-@set PL_DEFINES=-D_USE_MATH_DEFINES
+@set PL_COMPILER_FLAGS=
+@set PL_COMPILER_FLAGS=-Zc:preprocessor %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-nologo %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-std:c11 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-W4 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-WX %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4201 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4100 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4996 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4505 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4189 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd5105 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4115 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-permissive- %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-Od %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-MDd %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-Zi %PL_COMPILER_FLAGS%
 
-@rem common compiler flags
-@set PL_COMPILER_FLAGS=-Zc:preprocessor -nologo -std:c11 -EHsc -W4 -WX -wd4201 -wd4100 -wd4996 -wd4505 -wd4189 -wd5105 -wd4115
+@set PL_LINKER_FLAGS=
 
-@rem common libraries
-@set PL_LINK_LIBRARIES=pilotlight.lib
-
-@rem release specific
-@if "%PL_CONFIG%" equ "Release" (
-
-    @rem release specific defines
-    @set PL_DEFINES=%PL_DEFINES%
-
-    @rem release specific compiler flags
-    @set PL_COMPILER_FLAGS=-O2 -MD %PL_COMPILER_FLAGS%
-)
-
-@rem debug specific
-@if "%PL_CONFIG%" equ "Debug" (
-
-    @rem debug specific defines
-    @set PL_DEFINES=-DPL_PROFILING_ON -D_DEBUG -DPL_ALLOW_HOT_RELOAD -DPL_ENABLE_VALIDATION_LAYERS %PL_DEFINES%
-   
-    @rem debug specific compiler flags
-    @set PL_COMPILER_FLAGS=-Od -MDd -Zi %PL_COMPILER_FLAGS%
-)
-
-@if "%PL_BACKEND%" equ "dx11" (
-    @set PL_DEFINES=-DPL_DX11_BACKEND %PL_DEFINES%
-)
-
-@if "%PL_BACKEND%" equ "vulkan" (
-    @set PL_DEFINES=-DPL_VULKAN_BACKEND %PL_DEFINES%
-)
-
-@set PL_RESULT=[1m[92mSuccessful.[0m
-
-@rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-@rem |                          Shaders                                       |
-@rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-@rem compile shaders
-@echo.
-@echo [1m[93mStep: shaders[0m
-@echo [1m[93m~~~~~~~~~~~~~~~[0m
-@echo [1m[36mCompiling...[0m
-@REM %VULKAN_SDK%/bin/glslc -o ../out/simple.frag.spv ./shaders/simple.frag
-@REM %VULKAN_SDK%/bin/glslc -o ../out/simple.vert.spv ./shaders/simple.vert
-
-@rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-@rem |                          pl lib                                       |
-@rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-@set PL_SOURCES=pilotlight.c
+@set PL_LINK_LIBRARIES=
 
 @rem run compiler
 @echo.
-@echo [1m[93mStep: pilotlight.lib[0m
+@echo [1m[93mStep: pl_lib[0m
 @echo [1m[93m~~~~~~~~~~~~~~~~~~~~~~[0m
 @echo [1m[36mCompiling...[0m
-cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% -c -permissive- %PL_SOURCES% -Fe..\out\pilotlight.lib -Fo..\out\
+cl -c %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% pilotlight.c -Fe"../out/pilotlight.c.obj" -Fo"../out/"
 
 @rem check build status
 @set PL_BUILD_STATUS=%ERRORLEVEL%
 @if %PL_BUILD_STATUS% NEQ 0 (
     @echo [1m[91mCompilation Failed with error code[0m: %PL_BUILD_STATUS%
     @set PL_RESULT=[1m[91mFailed.[0m
-    goto CleanupPlLib
-)
-@echo [1m[36mLinking...[0m
+    goto Cleanuppl_lib)
 
 @rem link object files into a shared lib
-lib -nologo -OUT:..\out\pilotlight.lib ..\out\*.obj
+@echo [1m[36mLinking...[0m
+lib -nologo -OUT:"../out/pilotlight.lib" "../out/*.obj"
 
-:CleanupPlLib
+:Cleanuppl_lib
     @echo [1m[36mCleaning...[0m
-    @del ..\out\*.obj
+    @del "../out/*.obj"  > nul 2> nul
 
-@rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-@rem |                         extensions                                     |
-@rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+@del "../out/lock.tmp"
 
-@set PL_SOURCES="../extensions/pl_draw_extension.c"
+@echo.
+@echo [36mResult: [0m %PL_RESULT%
+@echo [36m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+@rem ################################################################################
+@rem #                          debug | pl_draw_extension                           #
+@rem ################################################################################
+
+@rem create output directory
+@if not exist "../out" @mkdir "../out"
+
+@echo LOCKING > "../out/lock.tmp"
+
+@set PL_DEFINES=
+@set PL_DEFINES=-DPL_VULKAN_BACKEND %PL_DEFINES%
+@set PL_DEFINES=-D_USE_MATH_DEFINES %PL_DEFINES%
+@set PL_DEFINES=-DPL_PROFILING_ON %PL_DEFINES%
+@set PL_DEFINES=-DPL_ALLOW_HOT_RELOAD %PL_DEFINES%
+@set PL_DEFINES=-DPL_ENABLE_VALIDATION_LAYERS %PL_DEFINES%
+@set PL_DEFINES=-D_DEBUG %PL_DEFINES%
+
+@set PL_INCLUDE_DIRECTORIES=
+@set PL_INCLUDE_DIRECTORIES=-I"%WindowsSdkDir%Include\um" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%WindowsSdkDir%Include\shared" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%DXSDK_DIR%Include" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%VULKAN_SDK%\Include" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../out" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../dependencies/stb" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../src" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../extensions" %PL_INCLUDE_DIRECTORIES%
+
+@set PL_LINK_DIRECTORIES=
+@set PL_LINK_DIRECTORIES=-LIBPATH:"%VULKAN_SDK%\Lib" %PL_LINK_DIRECTORIES%
+@set PL_LINK_DIRECTORIES=-LIBPATH:"../out" %PL_LINK_DIRECTORIES%
+
+@set PL_COMPILER_FLAGS=
+@set PL_COMPILER_FLAGS=-Od %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-MDd %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-Zi %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-Zc:preprocessor %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-nologo %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-std:c11 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-W4 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-WX %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4201 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4100 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4996 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4505 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4189 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd5105 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4115 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-permissive- %PL_COMPILER_FLAGS%
+
+@set PL_LINKER_FLAGS=
+@set PL_LINKER_FLAGS=-noimplib %PL_LINKER_FLAGS%
+@set PL_LINKER_FLAGS=-noexp %PL_LINKER_FLAGS%
+@set PL_LINKER_FLAGS=-incremental:no %PL_LINKER_FLAGS%
+
+@set PL_LINK_LIBRARIES=
+@set PL_LINK_LIBRARIES=pilotlight.lib %PL_LINK_LIBRARIES%
+
+@set PL_SOURCES=
+@set PL_SOURCES="../extensions/pl_draw_extension.c" %PL_SOURCES%
 
 @rem run compiler
 @echo.
-@echo [1m[93mStep: plugins[0m
-@echo [1m[93m~~~~~~~~~~~~~~~~[0m
-@echo [1m[36mCompiling...[0m
-cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% -permissive- %PL_SOURCES% -Fe..\out\pl_draw_extension.dll -Fo..\out\ -LD -link -noimplib -noexp -incremental:no -PDB:..\out\pl_draw_extension_%random%.pdb %PL_LINKER_FLAGS% %PL_LINK_DIRECTORIES% %PL_LINK_LIBRARIES%
-
-@rem check build status
-@set PL_BUILD_STATUS=%ERRORLEVEL%
-@if %PL_BUILD_STATUS% NEQ 0 (
-    echo [1m[91mCompilation Failed with error code[0m: %PL_BUILD_STATUS%
-    @set PL_RESULT=[1m[91mFailed.[0m
-    goto CleanupPlugins
-)
-
-:CleanupPlugins
-    @echo [1m[36mCleaning...[0m
-    @del ..\out\*.obj
-
-@rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-@rem |                         app lib                                        |
-@rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-@if "%PL_BACKEND%" equ "dx11"   ( @set PL_SOURCES="app_dx11.c" )
-@if "%PL_BACKEND%" equ "vulkan" ( @set PL_SOURCES="app_vulkan.c" )
-
-@rem run compiler
-@echo.
-@echo [1m[93mStep: app.dll[0m
-@echo [1m[93m~~~~~~~~~~~~~~~~[0m
-@echo [1m[36mCompiling...[0m
-cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% -permissive- %PL_SOURCES% -Fe..\out\app.dll -Fo..\out\ -LD -link -noimplib -noexp -incremental:no -PDB:..\out\app_%random%.pdb %PL_LINKER_FLAGS% %PL_LINK_DIRECTORIES% %PL_LINK_LIBRARIES%
-
-@rem check build status
-@set PL_BUILD_STATUS=%ERRORLEVEL%
-@if %PL_BUILD_STATUS% NEQ 0 (
-    echo [1m[91mCompilation Failed with error code[0m: %PL_BUILD_STATUS%
-    @set PL_RESULT=[1m[91mFailed.[0m
-    goto CleanupApp
-)
-
-:CleanupApp
-    @echo [1m[36mCleaning...[0m
-    @del ..\out\*.obj
-
-@if %PL_HOT_RELOADING_STATUS% equ 1 ( goto PrintInfo )
-
-@rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-@rem |                          Executable                                    |
-@rem ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-:MainBuild
-
-@set PL_SOURCES="pl_main_win32.c"
-
-@rem run compiler
-@echo.
-@echo [1m[93mStep: pilot_light.exe[0m
-@echo [1m[93m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+@echo [1m[93mStep: pl_draw_extension[0m
+@echo [1m[93m~~~~~~~~~~~~~~~~~~~~~~[0m
 @echo [1m[36mCompiling and Linking...[0m
-@cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% -permissive- %PL_SOURCES% -Fe..\out\pilot_light.exe -Fo..\out\ -link -incremental:no %PL_LINKER_FLAGS% %PL_LINK_DIRECTORIES% %PL_LINK_LIBRARIES%
+cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% %PL_SOURCES% -Fe"../out/pl_draw_extension.dll" -Fo"../out/" -LD -link %PL_LINKER_FLAGS% -PDB:"../out/pl_draw_extension_%random%.pdb" %PL_LINK_DIRECTORIES% %PL_LINK_LIBRARIES%
 
 @rem check build status
 @set PL_BUILD_STATUS=%ERRORLEVEL%
-
-@if %PL_BUILD_STATUS% neq 0 (
-    echo [1m[91mCompilation Failed with error code[0m: %PL_BUILD_STATUS%
+@if %PL_BUILD_STATUS% NEQ 0 (
+    @echo [1m[91mCompilation Failed with error code[0m: %PL_BUILD_STATUS%
     @set PL_RESULT=[1m[91mFailed.[0m
-    goto CleanupExe
+    goto Cleanuppl_draw_extension)
+
+
+:Cleanuppl_draw_extension
+    @echo [1m[36mCleaning...[0m
+    @del "../out/*.obj"  > nul 2> nul
+
+@del "../out/lock.tmp"
+
+@echo.
+@echo [36mResult: [0m %PL_RESULT%
+@echo [36m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+@rem ################################################################################
+@rem #                                 debug | app                                  #
+@rem ################################################################################
+
+@rem create output directory
+@if not exist "../out" @mkdir "../out"
+
+@echo LOCKING > "../out/lock.tmp"
+
+@set PL_DEFINES=
+@set PL_DEFINES=-DPL_VULKAN_BACKEND %PL_DEFINES%
+@set PL_DEFINES=-D_USE_MATH_DEFINES %PL_DEFINES%
+@set PL_DEFINES=-DPL_PROFILING_ON %PL_DEFINES%
+@set PL_DEFINES=-DPL_ALLOW_HOT_RELOAD %PL_DEFINES%
+@set PL_DEFINES=-DPL_ENABLE_VALIDATION_LAYERS %PL_DEFINES%
+
+@set PL_INCLUDE_DIRECTORIES=
+@set PL_INCLUDE_DIRECTORIES=-I"%WindowsSdkDir%Include\um" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%WindowsSdkDir%Include\shared" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%DXSDK_DIR%Include" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%VULKAN_SDK%\Include" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../out" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../dependencies/stb" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../src" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../extensions" %PL_INCLUDE_DIRECTORIES%
+
+@set PL_LINK_DIRECTORIES=
+@set PL_LINK_DIRECTORIES=-LIBPATH:"%VULKAN_SDK%\Lib" %PL_LINK_DIRECTORIES%
+@set PL_LINK_DIRECTORIES=-LIBPATH:"../out" %PL_LINK_DIRECTORIES%
+
+@set PL_COMPILER_FLAGS=
+@set PL_COMPILER_FLAGS=-Od %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-MDd %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-Zi %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-Zc:preprocessor %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-nologo %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-std:c11 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-W4 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-WX %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4201 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4100 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4996 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4505 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4189 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd5105 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4115 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-permissive- %PL_COMPILER_FLAGS%
+
+@set PL_LINKER_FLAGS=
+@set PL_LINKER_FLAGS=-noimplib %PL_LINKER_FLAGS%
+@set PL_LINKER_FLAGS=-noexp %PL_LINKER_FLAGS%
+@set PL_LINKER_FLAGS=-incremental:no %PL_LINKER_FLAGS%
+
+@set PL_LINK_LIBRARIES=
+@set PL_LINK_LIBRARIES=pilotlight.lib %PL_LINK_LIBRARIES%
+
+@set PL_SOURCES=
+@set PL_SOURCES="app_vulkan.c" %PL_SOURCES%
+
+@rem run compiler
+@echo.
+@echo [1m[93mStep: app[0m
+@echo [1m[93m~~~~~~~~~~~~~~~~~~~~~~[0m
+@echo [1m[36mCompiling and Linking...[0m
+cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% %PL_SOURCES% -Fe"../out/app.dll" -Fo"../out/" -LD -link %PL_LINKER_FLAGS% -PDB:"../out/app_%random%.pdb" %PL_LINK_DIRECTORIES% %PL_LINK_LIBRARIES%
+
+@rem check build status
+@set PL_BUILD_STATUS=%ERRORLEVEL%
+@if %PL_BUILD_STATUS% NEQ 0 (
+    @echo [1m[91mCompilation Failed with error code[0m: %PL_BUILD_STATUS%
+    @set PL_RESULT=[1m[91mFailed.[0m
+    goto Cleanupapp)
+
+
+:Cleanupapp
+    @echo [1m[36mCleaning...[0m
+    @del "../out/*.obj"  > nul 2> nul
+
+@del "../out/lock.tmp"
+
+@echo.
+@echo [36mResult: [0m %PL_RESULT%
+@echo [36m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+@rem ################################################################################
+@rem #                             debug | pilot_light                              #
+@rem ################################################################################
+
+@rem create output directory
+@if not exist "../out" @mkdir "../out"
+
+@echo LOCKING > "../out/lock.tmp"
+
+@set PL_DEFINES=
+@set PL_DEFINES=-DPL_VULKAN_BACKEND %PL_DEFINES%
+@set PL_DEFINES=-D_USE_MATH_DEFINES %PL_DEFINES%
+@set PL_DEFINES=-DPL_PROFILING_ON %PL_DEFINES%
+@set PL_DEFINES=-DPL_ALLOW_HOT_RELOAD %PL_DEFINES%
+@set PL_DEFINES=-DPL_ENABLE_VALIDATION_LAYERS %PL_DEFINES%
+@set PL_DEFINES=-D_DEBUG %PL_DEFINES%
+
+@set PL_INCLUDE_DIRECTORIES=
+@set PL_INCLUDE_DIRECTORIES=-I"%WindowsSdkDir%Include\um" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%WindowsSdkDir%Include\shared" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%DXSDK_DIR%Include" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%VULKAN_SDK%\Include" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../out" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../dependencies/stb" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../src" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../extensions" %PL_INCLUDE_DIRECTORIES%
+
+@set PL_LINK_DIRECTORIES=
+@set PL_LINK_DIRECTORIES=-LIBPATH:"%VULKAN_SDK%\Lib" %PL_LINK_DIRECTORIES%
+@set PL_LINK_DIRECTORIES=-LIBPATH:"../out" %PL_LINK_DIRECTORIES%
+
+@set PL_COMPILER_FLAGS=
+@set PL_COMPILER_FLAGS=-Zc:preprocessor %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-nologo %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-std:c11 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-W4 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-WX %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4201 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4100 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4996 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4505 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4189 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd5105 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4115 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-permissive- %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-Od %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-MDd %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-Zi %PL_COMPILER_FLAGS%
+
+@set PL_LINKER_FLAGS=
+@set PL_LINKER_FLAGS=-noimplib %PL_LINKER_FLAGS%
+@set PL_LINKER_FLAGS=-noexp %PL_LINKER_FLAGS%
+@set PL_LINKER_FLAGS=-incremental:no %PL_LINKER_FLAGS%
+
+@set PL_LINK_LIBRARIES=
+@set PL_LINK_LIBRARIES=pilotlight.lib %PL_LINK_LIBRARIES%
+
+@set PL_SOURCES=
+@set PL_SOURCES="pl_main_win32.c" %PL_SOURCES%
+
+@if %PL_HOT_RELOAD_STATUS% equ 1 ( goto Cleanuppilot_light )
+@rem run compiler
+@echo.
+@echo [1m[93mStep: pilot_light[0m
+@echo [1m[93m~~~~~~~~~~~~~~~~~~~~~~[0m
+@echo [1m[36mCompiling and Linking...[0m
+cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% %PL_SOURCES% -Fe"../out/pilot_light.exe" -Fo"../out/" -link %PL_LINKER_FLAGS% %PL_LINK_DIRECTORIES% %PL_LINK_LIBRARIES%
+
+@rem check build status
+@set PL_BUILD_STATUS=%ERRORLEVEL%
+@if %PL_BUILD_STATUS% NEQ 0 (
+    @echo [1m[91mCompilation Failed with error code[0m: %PL_BUILD_STATUS%
+    @set PL_RESULT=[1m[91mFailed.[0m
+    goto Cleanuppilot_light
 )
 
-:CleanupExe
+
+:Cleanuppilot_light
     @echo [1m[36mCleaning...[0m
-    @del ..\out\*.obj
+    @del "../out/*.obj"  > nul 2> nul
 
-@rem --------------------------------------------------------------------------
-@rem Information Output
-@rem --------------------------------------------------------------------------
-:PrintInfo
+
+@del "../out/lock.tmp"
+
 @echo.
-@echo [36m--------------------------------------------------------------------------[0m
-@echo [1m[93m                        Build Information [0m
-@echo [36mResults:             [0m %PL_RESULT%
-@echo [36mConfiguration:       [0m [35m%PL_CONFIG%[0m
-@echo [36mWorking directory:   [0m [35m%dir%[0m
-@echo [36mOutput directory:    [0m [35m..\out[0m
-@echo [36mOutput binary:       [0m [33mpilot_light.exe[0m
-@echo [36m--------------------------------------------------------------------------[0m
+@echo [36mResult: [0m %PL_RESULT%
+@echo [36m~~~~~~~~~~~~~~~~~~~~~~[0m
 
-del ..\out\lock.tmp
-del ..\out\pl_draw_extension_lock.tmp
-
-@popd
-
-@rem keep terminal open if clicked from explorer
+goto ExitLabel
+:debugdx11
+@set PL_HOT_RELOAD_STATUS=0
 @echo off
-for %%x in (%cmdcmdline%) do if /i "%%~x"=="/c" set DOUBLECLICKED=1
-if defined DOUBLECLICKED pause
+2>nul (>>../out/pilot_light.exe echo off) && (@set PL_HOT_RELOAD_STATUS=0) || (@set PL_HOT_RELOAD_STATUS=1)
+@if %PL_HOT_RELOAD_STATUS% equ 1 (
+    @echo.
+    @echo [1m[97m[41m--------[42m HOT RELOADING [41m--------[0m
+)
+
+
+@if %PL_HOT_RELOAD_STATUS% equ 0 (
+    @echo.
+    @if exist "../out/pilotlight.lib" del "../out/pilotlight.lib"
+    @if exist "../out/pl_draw_extension.dll" del "../out/pl_draw_extension.dll"
+    @if exist "../out/pl_draw_extension_*.dll" del "../out/pl_draw_extension_*.dll"
+    @if exist "../out/pl_draw_extension_*.pdb" del "../out/pl_draw_extension_*.pdb"
+    @if exist "../out/app.dll" del "../out/app.dll"
+    @if exist "../out/app_*.dll" del "../out/app_*.dll"
+    @if exist "../out/app_*.pdb" del "../out/app_*.pdb"
+    @if exist "../out/pilot_light.exe" del "../out/pilot_light.exe"
+)
+
+@rem ################################################################################
+@rem #                              debugdx11 | pl_lib                              #
+@rem ################################################################################
+
+@rem create output directory
+@if not exist "../out" @mkdir "../out"
+
+@echo LOCKING > "../out/lock.tmp"
+
+@set PL_DEFINES=
+@set PL_DEFINES=-DPL_VULKAN_BACKEND %PL_DEFINES%
+@set PL_DEFINES=-D_USE_MATH_DEFINES %PL_DEFINES%
+@set PL_DEFINES=-DPL_PROFILING_ON %PL_DEFINES%
+@set PL_DEFINES=-DPL_ALLOW_HOT_RELOAD %PL_DEFINES%
+@set PL_DEFINES=-DPL_ENABLE_VALIDATION_LAYERS %PL_DEFINES%
+
+@set PL_INCLUDE_DIRECTORIES=
+@set PL_INCLUDE_DIRECTORIES=-I"%WindowsSdkDir%Include\um" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%WindowsSdkDir%Include\shared" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%DXSDK_DIR%Include" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%VULKAN_SDK%\Include" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../out" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../dependencies/stb" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../src" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../extensions" %PL_INCLUDE_DIRECTORIES%
+
+@set PL_LINK_DIRECTORIES=
+@set PL_LINK_DIRECTORIES=-LIBPATH:"%VULKAN_SDK%\Lib" %PL_LINK_DIRECTORIES%
+@set PL_LINK_DIRECTORIES=-LIBPATH:"../out" %PL_LINK_DIRECTORIES%
+
+@set PL_COMPILER_FLAGS=
+@set PL_COMPILER_FLAGS=-Zc:preprocessor %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-nologo %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-std:c11 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-W4 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-WX %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4201 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4100 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4996 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4505 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4189 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd5105 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4115 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-permissive- %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-O2 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-MD %PL_COMPILER_FLAGS%
+
+@set PL_LINKER_FLAGS=
+
+@set PL_LINK_LIBRARIES=
+
+@rem run compiler
+@echo.
+@echo [1m[93mStep: pl_lib[0m
+@echo [1m[93m~~~~~~~~~~~~~~~~~~~~~~[0m
+@echo [1m[36mCompiling...[0m
+cl -c %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% pilotlight.c -Fe"../out/pilotlight.c.obj" -Fo"../out/"
+
+@rem check build status
+@set PL_BUILD_STATUS=%ERRORLEVEL%
+@if %PL_BUILD_STATUS% NEQ 0 (
+    @echo [1m[91mCompilation Failed with error code[0m: %PL_BUILD_STATUS%
+    @set PL_RESULT=[1m[91mFailed.[0m
+    goto Cleanuppl_lib)
+
+@rem link object files into a shared lib
+@echo [1m[36mLinking...[0m
+lib -nologo -OUT:"../out/pilotlight.lib" "../out/*.obj"
+
+:Cleanuppl_lib
+    @echo [1m[36mCleaning...[0m
+    @del "../out/*.obj"  > nul 2> nul
+
+@del "../out/lock.tmp"
+
+@echo.
+@echo [36mResult: [0m %PL_RESULT%
+@echo [36m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+@rem ################################################################################
+@rem #                        debugdx11 | pl_draw_extension                         #
+@rem ################################################################################
+
+@rem create output directory
+@if not exist "../out" @mkdir "../out"
+
+@echo LOCKING > "../out/lock.tmp"
+
+@set PL_DEFINES=
+@set PL_DEFINES=-DPL_VULKAN_BACKEND %PL_DEFINES%
+@set PL_DEFINES=-D_USE_MATH_DEFINES %PL_DEFINES%
+@set PL_DEFINES=-DPL_PROFILING_ON %PL_DEFINES%
+@set PL_DEFINES=-DPL_ALLOW_HOT_RELOAD %PL_DEFINES%
+@set PL_DEFINES=-DPL_ENABLE_VALIDATION_LAYERS %PL_DEFINES%
+@set PL_DEFINES=-D_DEBUG %PL_DEFINES%
+
+@set PL_INCLUDE_DIRECTORIES=
+@set PL_INCLUDE_DIRECTORIES=-I"%WindowsSdkDir%Include\um" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%WindowsSdkDir%Include\shared" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%DXSDK_DIR%Include" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%VULKAN_SDK%\Include" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../out" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../dependencies/stb" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../src" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../extensions" %PL_INCLUDE_DIRECTORIES%
+
+@set PL_LINK_DIRECTORIES=
+@set PL_LINK_DIRECTORIES=-LIBPATH:"%VULKAN_SDK%\Lib" %PL_LINK_DIRECTORIES%
+@set PL_LINK_DIRECTORIES=-LIBPATH:"../out" %PL_LINK_DIRECTORIES%
+
+@set PL_COMPILER_FLAGS=
+@set PL_COMPILER_FLAGS=-Od %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-MDd %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-Zi %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-Zc:preprocessor %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-nologo %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-std:c11 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-W4 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-WX %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4201 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4100 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4996 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4505 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4189 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd5105 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4115 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-permissive- %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-O2 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-MD %PL_COMPILER_FLAGS%
+
+@set PL_LINKER_FLAGS=
+@set PL_LINKER_FLAGS=-noimplib %PL_LINKER_FLAGS%
+@set PL_LINKER_FLAGS=-noexp %PL_LINKER_FLAGS%
+@set PL_LINKER_FLAGS=-incremental:no %PL_LINKER_FLAGS%
+
+@set PL_LINK_LIBRARIES=
+@set PL_LINK_LIBRARIES=pilotlight.lib %PL_LINK_LIBRARIES%
+
+@set PL_SOURCES=
+@set PL_SOURCES="../extensions/pl_draw_extension.c" %PL_SOURCES%
+
+@rem run compiler
+@echo.
+@echo [1m[93mStep: pl_draw_extension[0m
+@echo [1m[93m~~~~~~~~~~~~~~~~~~~~~~[0m
+@echo [1m[36mCompiling and Linking...[0m
+cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% %PL_SOURCES% -Fe"../out/pl_draw_extension.dll" -Fo"../out/" -LD -link %PL_LINKER_FLAGS% -PDB:"../out/pl_draw_extension_%random%.pdb" %PL_LINK_DIRECTORIES% %PL_LINK_LIBRARIES%
+
+@rem check build status
+@set PL_BUILD_STATUS=%ERRORLEVEL%
+@if %PL_BUILD_STATUS% NEQ 0 (
+    @echo [1m[91mCompilation Failed with error code[0m: %PL_BUILD_STATUS%
+    @set PL_RESULT=[1m[91mFailed.[0m
+    goto Cleanuppl_draw_extension)
+
+
+:Cleanuppl_draw_extension
+    @echo [1m[36mCleaning...[0m
+    @del "../out/*.obj"  > nul 2> nul
+
+@del "../out/lock.tmp"
+
+@echo.
+@echo [36mResult: [0m %PL_RESULT%
+@echo [36m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+@rem ################################################################################
+@rem #                               debugdx11 | app                                #
+@rem ################################################################################
+
+@rem create output directory
+@if not exist "../out" @mkdir "../out"
+
+@echo LOCKING > "../out/lock.tmp"
+
+@set PL_DEFINES=
+@set PL_DEFINES=-DPL_VULKAN_BACKEND %PL_DEFINES%
+@set PL_DEFINES=-D_USE_MATH_DEFINES %PL_DEFINES%
+@set PL_DEFINES=-DPL_PROFILING_ON %PL_DEFINES%
+@set PL_DEFINES=-DPL_ALLOW_HOT_RELOAD %PL_DEFINES%
+@set PL_DEFINES=-DPL_ENABLE_VALIDATION_LAYERS %PL_DEFINES%
+
+@set PL_INCLUDE_DIRECTORIES=
+@set PL_INCLUDE_DIRECTORIES=-I"%WindowsSdkDir%Include\um" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%WindowsSdkDir%Include\shared" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%DXSDK_DIR%Include" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%VULKAN_SDK%\Include" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../out" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../dependencies/stb" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../src" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../extensions" %PL_INCLUDE_DIRECTORIES%
+
+@set PL_LINK_DIRECTORIES=
+@set PL_LINK_DIRECTORIES=-LIBPATH:"%VULKAN_SDK%\Lib" %PL_LINK_DIRECTORIES%
+@set PL_LINK_DIRECTORIES=-LIBPATH:"../out" %PL_LINK_DIRECTORIES%
+
+@set PL_COMPILER_FLAGS=
+@set PL_COMPILER_FLAGS=-Zc:preprocessor %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-nologo %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-std:c11 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-W4 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-WX %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4201 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4100 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4996 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4505 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4189 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd5105 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4115 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-permissive- %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-Od %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-MDd %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-Zi %PL_COMPILER_FLAGS%
+
+@set PL_LINKER_FLAGS=
+@set PL_LINKER_FLAGS=-noimplib %PL_LINKER_FLAGS%
+@set PL_LINKER_FLAGS=-noexp %PL_LINKER_FLAGS%
+@set PL_LINKER_FLAGS=-incremental:no %PL_LINKER_FLAGS%
+
+@set PL_LINK_LIBRARIES=
+@set PL_LINK_LIBRARIES=pilotlight.lib %PL_LINK_LIBRARIES%
+
+@set PL_SOURCES=
+@set PL_SOURCES="app_dx11.c" %PL_SOURCES%
+
+@rem run compiler
+@echo.
+@echo [1m[93mStep: app[0m
+@echo [1m[93m~~~~~~~~~~~~~~~~~~~~~~[0m
+@echo [1m[36mCompiling and Linking...[0m
+cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% %PL_SOURCES% -Fe"../out/app.dll" -Fo"../out/" -LD -link %PL_LINKER_FLAGS% -PDB:"../out/app_%random%.pdb" %PL_LINK_DIRECTORIES% %PL_LINK_LIBRARIES%
+
+@rem check build status
+@set PL_BUILD_STATUS=%ERRORLEVEL%
+@if %PL_BUILD_STATUS% NEQ 0 (
+    @echo [1m[91mCompilation Failed with error code[0m: %PL_BUILD_STATUS%
+    @set PL_RESULT=[1m[91mFailed.[0m
+    goto Cleanupapp)
+
+
+:Cleanupapp
+    @echo [1m[36mCleaning...[0m
+    @del "../out/*.obj"  > nul 2> nul
+
+@del "../out/lock.tmp"
+
+@echo.
+@echo [36mResult: [0m %PL_RESULT%
+@echo [36m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+@rem ################################################################################
+@rem #                           debugdx11 | pilot_light                            #
+@rem ################################################################################
+
+@rem create output directory
+@if not exist "../out" @mkdir "../out"
+
+@echo LOCKING > "../out/lock.tmp"
+
+@set PL_DEFINES=
+@set PL_DEFINES=-DPL_VULKAN_BACKEND %PL_DEFINES%
+@set PL_DEFINES=-D_USE_MATH_DEFINES %PL_DEFINES%
+@set PL_DEFINES=-DPL_PROFILING_ON %PL_DEFINES%
+@set PL_DEFINES=-DPL_ALLOW_HOT_RELOAD %PL_DEFINES%
+@set PL_DEFINES=-DPL_ENABLE_VALIDATION_LAYERS %PL_DEFINES%
+
+@set PL_INCLUDE_DIRECTORIES=
+@set PL_INCLUDE_DIRECTORIES=-I"%WindowsSdkDir%Include\um" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%WindowsSdkDir%Include\shared" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%DXSDK_DIR%Include" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"%VULKAN_SDK%\Include" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../out" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../dependencies/stb" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../src" %PL_INCLUDE_DIRECTORIES%
+@set PL_INCLUDE_DIRECTORIES=-I"../extensions" %PL_INCLUDE_DIRECTORIES%
+
+@set PL_LINK_DIRECTORIES=
+@set PL_LINK_DIRECTORIES=-LIBPATH:"%VULKAN_SDK%\Lib" %PL_LINK_DIRECTORIES%
+@set PL_LINK_DIRECTORIES=-LIBPATH:"../out" %PL_LINK_DIRECTORIES%
+
+@set PL_COMPILER_FLAGS=
+@set PL_COMPILER_FLAGS=-Zc:preprocessor %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-nologo %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-std:c11 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-W4 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-WX %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4201 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4100 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4996 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4505 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4189 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd5105 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-wd4115 %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-permissive- %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-Od %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-MDd %PL_COMPILER_FLAGS%
+@set PL_COMPILER_FLAGS=-Zi %PL_COMPILER_FLAGS%
+
+@set PL_LINKER_FLAGS=
+@set PL_LINKER_FLAGS=-noimplib %PL_LINKER_FLAGS%
+@set PL_LINKER_FLAGS=-noexp %PL_LINKER_FLAGS%
+@set PL_LINKER_FLAGS=-incremental:no %PL_LINKER_FLAGS%
+
+@set PL_LINK_LIBRARIES=
+@set PL_LINK_LIBRARIES=pilotlight.lib %PL_LINK_LIBRARIES%
+
+@set PL_SOURCES=
+@set PL_SOURCES="pl_main_win32.c" %PL_SOURCES%
+
+@if %PL_HOT_RELOAD_STATUS% equ 1 ( goto Cleanuppilot_light )
+@rem run compiler
+@echo.
+@echo [1m[93mStep: pilot_light[0m
+@echo [1m[93m~~~~~~~~~~~~~~~~~~~~~~[0m
+@echo [1m[36mCompiling and Linking...[0m
+cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% %PL_SOURCES% -Fe"../out/pilot_light.exe" -Fo"../out/" -link %PL_LINKER_FLAGS% %PL_LINK_DIRECTORIES% %PL_LINK_LIBRARIES%
+
+@rem check build status
+@set PL_BUILD_STATUS=%ERRORLEVEL%
+@if %PL_BUILD_STATUS% NEQ 0 (
+    @echo [1m[91mCompilation Failed with error code[0m: %PL_BUILD_STATUS%
+    @set PL_RESULT=[1m[91mFailed.[0m
+    goto Cleanuppilot_light
+)
+
+
+:Cleanuppilot_light
+    @echo [1m[36mCleaning...[0m
+    @del "../out/*.obj"  > nul 2> nul
+
+
+@del "../out/lock.tmp"
+
+@echo.
+@echo [36mResult: [0m %PL_RESULT%
+@echo [36m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+goto ExitLabel
+:ExitLabel
+@popd
