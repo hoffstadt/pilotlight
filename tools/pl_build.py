@@ -273,8 +273,7 @@ def generate_macos_build():
         file_type = FileType.BASH
 
         with open(filepath, "w") as file:
-            buffer = "#!/bin/bash"
-            buffer += _new_lines(2)
+            buffer = "#!/bin/bash\n\n"
             buffer += "# colors\n"
             buffer += "BOLD=$'\e[0;1m'\n"
             buffer += "RED=$'\e[0;31m'\n"
@@ -285,18 +284,16 @@ def generate_macos_build():
             buffer += "MAGENTA=$'\e[0;35m'\n"
             buffer += "YELLOW=$'\e[0;33m'\n"
             buffer += "WHITE=$'\e[0;97m'\n"
-            buffer += "NC=$'\e[0m'\n"
-            buffer += _new_lines(2)
-            buffer += _comment('find directory of this script', file_type)
+            buffer += "NC=$'\e[0m'\n\n"
+            buffer += '@rem find directory of this script\n'
             buffer += "SOURCE=${BASH_SOURCE[0]}\n"
             buffer += 'while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink\n'
             buffer += '  DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )\n'
             buffer += '  SOURCE=$(readlink "$SOURCE")\n'
             buffer += '  [[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located\n'
             buffer += 'done\n'
-            buffer += 'DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )\n'
-            buffer += _new_lines(2)
-            buffer += _comment('make current directory the same as this script', file_type)
+            buffer += 'DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )\n\n'
+            buffer += '@rem make current directory the same as this script\n'
             buffer += 'pushd $DIR >/dev/null\n'
             buffer += _comment('get platform & architecture', file_type)
             buffer += 'PLAT="$(uname)"\n'
@@ -741,8 +738,8 @@ def generate_msvc_build():
                                         buffer += ":" + register_config + "\n"
                                         buffer += "@set PL_HOT_RELOAD_STATUS=0\n"
                                         buffer += "@echo off\n"
-                                        buffer += '@if not exist "' + settings._output_directory + '" @mkdir "' + settings._output_directory + '"'
-                                        buffer += '2>nul (>>' + settings._output_directory + '/' + settings._output_binary + settings._output_binary_extension + ' echo off) && (@set PL_HOT_RELOAD_STATUS=0) || (@set PL_HOT_RELOAD_STATUS=1)\n'
+                                        buffer += '@if not exist "' + settings._output_directory + '" @mkdir "' + settings._output_directory + '"\n'
+                                        buffer += '2>nul (>>"' + settings._output_directory + '/' + settings._output_binary + settings._output_binary_extension + '" echo off) && (@set PL_HOT_RELOAD_STATUS=0) || (@set PL_HOT_RELOAD_STATUS=1)\n'
                                         buffer += "@if %PL_HOT_RELOAD_STATUS% equ 1 (\n"
                                         buffer += "    @echo.\n"
                                         buffer += "    @echo [1m[97m[41m--------[42m HOT RELOADING [41m--------[0m\n"
@@ -886,12 +883,12 @@ def generate_msvc_build():
                                             buffer += '@set PL_SOURCES="' + source + '" %PL_SOURCES%\n'
                                         buffer += _new_lines(1)
 
-                                        buffer += '@if %PL_HOT_RELOAD_STATUS% equ 1 ( goto ' + 'Cleanup' + target._name + ' )\n'   
-                                        buffer += _comment('run compiler', file_type)
                                         buffer += "@echo.\n"
                                         buffer += '@echo [1m[93mStep: ' + target._name +'[0m\n'
                                         buffer += '@echo [1m[93m~~~~~~~~~~~~~~~~~~~~~~[0m\n'
                                         buffer += '@echo [1m[36mCompiling and Linking...[0m\n'
+                                        buffer += '@if %PL_HOT_RELOAD_STATUS% equ 1 ( goto ' + 'Cleanup' + target._name + ' )\n'   
+                                        buffer += _comment('run compiler', file_type)
                                         buffer += 'cl %PL_INCLUDE_DIRECTORIES% %PL_DEFINES% %PL_COMPILER_FLAGS% %PL_SOURCES% -Fe"' + settings._output_directory + '/' + settings._output_binary + settings._output_binary_extension + '" -Fo"' + settings._output_directory + '/" -link %PL_LINKER_FLAGS% %PL_LINK_DIRECTORIES% %PL_LINK_LIBRARIES%'
                                         buffer += _new_lines(1)
 
