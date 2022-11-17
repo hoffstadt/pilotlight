@@ -5,12 +5,20 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/../tools")
 
 import pl_build as pl
 
-with pl.project("pilotlight") as pilotlight:
+with pl.project("pilotlight"):
+    
+    # configurations
     pl.add_configuration("debug")
-    pl.add_configuration("debugdx11")
+    pl.add_configuration("debugdx11") # only used on win32 for direct x11
+
+    # where to output build scripts
     pl.set_working_directory(".")
+
+    # used to decide hot reloading
     pl.set_main_target("pilot_light")
-    pl.set_build_win32_script_name("build")
+
+    # script output names
+    pl.set_build_win32_script_name("build_win32")
     pl.set_build_macos_script_name("build_macos")
     pl.set_build_linux_script_name("build_linux")
 
@@ -32,7 +40,7 @@ with pl.project("pilotlight") as pilotlight:
     def clang_project_commons():
         pl.add_definition("PL_METAL_BACKEND")
         pl.add_compiler_flags("-std=c99", "-fmodules", "-ObjC", "--debug", "-g")
-        pl.add_link_libraries("Metal", "MetalKit", "Cocoa", "IOKit", "CoreVideo", "QuartzCore")
+        pl.add_frameworks("Metal", "MetalKit", "Cocoa", "IOKit", "CoreVideo", "QuartzCore")
 
     def project_commons():
         pl.add_include_directories("../out", "../dependencies/stb", "../src", "../extensions")
