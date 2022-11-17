@@ -58,29 +58,33 @@ with pl.project("pilotlight"):
             pl.add_source_file("pilotlight.c")
 
         with pl.configuration("debug"):
-            with pl.compiler("msvc", pl.Compiler.MSVC):
-                msvc_project_commons()
-                project_commons()
-                config_commons()
-                pl.add_definition("_DEBUG")
-                pl.add_definition("PL_VULKAN_BACKEND")
-                pl.add_compiler_flags("-Od", "-MDd", "-Zi")
-            with pl.compiler("gcc", pl.Compiler.GCC):
-                project_commons()
-                config_commons()
-                gcc_project_commons()
-            with pl.compiler("clang", pl.Compiler.CLANG):
-                project_commons()
-                config_commons()
-                clang_project_commons()
+            with pl.platform(pl.PlatformType.WIN32):
+                with pl.compiler("msvc", pl.CompilerType.MSVC):
+                    msvc_project_commons()
+                    project_commons()
+                    config_commons()
+                    pl.add_definition("_DEBUG")
+                    pl.add_definition("PL_VULKAN_BACKEND")
+                    pl.add_compiler_flags("-Od", "-MDd", "-Zi")
+            with pl.platform(pl.PlatformType.LINUX):
+                with pl.compiler("gcc", pl.CompilerType.GCC):
+                    project_commons()
+                    config_commons()
+                    gcc_project_commons()
+            with pl.platform(pl.PlatformType.MACOS):
+                with pl.compiler("clang", pl.CompilerType.CLANG):
+                    project_commons()
+                    config_commons()
+                    clang_project_commons()
 
         with pl.configuration("debugdx11"):
-            with pl.compiler("msvc", pl.Compiler.MSVC):
-                msvc_project_commons()
-                project_commons()
-                config_commons()
-                pl.add_compiler_flags("-Od", "-MDd", "-Zi")
-                pl.add_definition("PL_DX11_BACKEND")
+            with pl.platform(pl.PlatformType.WIN32):
+                with pl.compiler("msvc", pl.CompilerType.MSVC):
+                    msvc_project_commons()
+                    project_commons()
+                    config_commons()
+                    pl.add_compiler_flags("-Od", "-MDd", "-Zi")
+                    pl.add_definition("PL_DX11_BACKEND")
 
     ###############################################################################
     #                                 pl_draw_extension                           #
@@ -98,30 +102,34 @@ with pl.project("pilotlight"):
             pl.add_definition("_DEBUG") 
             
         with pl.configuration("debug"):
-            with pl.compiler("msvc", pl.Compiler.MSVC):
-                msvc_config_commons()
-                msvc_project_commons()
-                project_commons()
-                config_commons()
-                pl.add_definition("PL_VULKAN_BACKEND")      
-            with pl.compiler("gcc", pl.Compiler.GCC):
-                project_commons()
-                gcc_project_commons()
-                config_commons()
-                pl.add_source_file("../out/pilotlight.c.o")
-            with pl.compiler("clang", pl.Compiler.CLANG):
-                project_commons()
-                config_commons()
-                clang_project_commons()
-                pl.add_source_file("../out/pilotlight.c.o")
+            with pl.platform(pl.PlatformType.WIN32):
+                with pl.compiler("msvc", pl.CompilerType.MSVC):
+                    msvc_config_commons()
+                    msvc_project_commons()
+                    project_commons()
+                    config_commons()
+                    pl.add_definition("PL_VULKAN_BACKEND")      
+            with pl.platform(pl.PlatformType.LINUX):
+                with pl.compiler("gcc", pl.CompilerType.GCC):
+                    project_commons()
+                    gcc_project_commons()
+                    config_commons()
+                    pl.add_source_file("../out/pilotlight.c.o")
+            with pl.platform(pl.PlatformType.MACOS):
+                with pl.compiler("clang", pl.CompilerType.CLANG):
+                    project_commons()
+                    config_commons()
+                    clang_project_commons()
+                    pl.add_source_file("../out/pilotlight.c.o")
 
         with pl.configuration("debugdx11"):
-            with pl.compiler("msvc", pl.Compiler.MSVC):
-                msvc_config_commons()
-                msvc_project_commons()
-                project_commons()
-                config_commons()
-                pl.add_definition("PL_DX11_BACKEND")
+            with pl.platform(pl.PlatformType.WIN32):
+                with pl.compiler("msvc", pl.CompilerType.MSVC):
+                    msvc_config_commons()
+                    msvc_project_commons()
+                    project_commons()
+                    config_commons()
+                    pl.add_definition("PL_DX11_BACKEND")
 
     ###############################################################################
     #                                    app                                      #
@@ -137,34 +145,38 @@ with pl.project("pilotlight"):
             pl.set_output_binary("app")
             
         with pl.configuration("debug"):
-            with pl.compiler("msvc", pl.Compiler.MSVC):
-                msvc_config_commons()
-                msvc_project_commons()
-                project_commons()
-                config_commons()
-                pl.add_source_file("app_vulkan.c")
-                pl.add_definition("PL_VULKAN_BACKEND")
-            with pl.compiler("gcc", pl.Compiler.GCC):
-                project_commons()
-                gcc_project_commons()
-                config_commons()
-                pl.add_source_file("app_vulkan.c")
-                pl.add_source_file("../out/pilotlight.c.o")
-            with pl.compiler("clang", pl.Compiler.CLANG):
-                project_commons()
-                config_commons()
-                clang_project_commons()
-                pl.add_source_file("app_metal.m")
-                pl.add_source_file("../out/pilotlight.c.o")
+            with pl.platform(pl.PlatformType.WIN32):
+                with pl.compiler("msvc", pl.CompilerType.MSVC):
+                    msvc_config_commons()
+                    msvc_project_commons()
+                    project_commons()
+                    config_commons()
+                    pl.add_source_file("app_vulkan.c")
+                    pl.add_definition("PL_VULKAN_BACKEND")
+            with pl.platform(pl.PlatformType.LINUX):
+                with pl.compiler("gcc", pl.CompilerType.GCC):
+                    project_commons()
+                    gcc_project_commons()
+                    config_commons()
+                    pl.add_source_file("app_vulkan.c")
+                    pl.add_source_file("../out/pilotlight.c.o")
+            with pl.platform(pl.PlatformType.MACOS):
+                with pl.compiler("clang", pl.CompilerType.CLANG):
+                    project_commons()
+                    config_commons()
+                    clang_project_commons()
+                    pl.add_source_file("app_metal.m")
+                    pl.add_source_file("../out/pilotlight.c.o")
 
         with pl.configuration("debugdx11"):
-            with pl.compiler("msvc", pl.Compiler.MSVC):
-                msvc_project_commons()
-                msvc_config_commons()
-                project_commons()
-                config_commons()
-                pl.add_source_file("app_dx11.c")
-                pl.add_definition("PL_DX11_BACKEND")
+            with pl.platform(pl.PlatformType.WIN32):
+                with pl.compiler("msvc", pl.CompilerType.MSVC):
+                    msvc_project_commons()
+                    msvc_config_commons()
+                    project_commons()
+                    config_commons()
+                    pl.add_source_file("app_dx11.c")
+                    pl.add_definition("PL_DX11_BACKEND")
 
     ###############################################################################
     #                                 pilot_light                                 #
@@ -181,34 +193,38 @@ with pl.project("pilotlight"):
             pl.set_output_binary("pilot_light")
                
         with pl.configuration("debug"):
-            with pl.compiler("msvc", pl.Compiler.MSVC):
-                msvc_project_commons()
-                msvc_config_commons()
-                project_commons()
-                config_commons()
-                pl.add_definition("_DEBUG")
-                pl.add_definition("PL_VULKAN_BACKEND")
-            with pl.compiler("gcc", pl.Compiler.GCC):
-                project_commons()
-                gcc_project_commons()
-                config_commons()
-                pl.add_source_file("../out/pilotlight.c.o")
-                pl.add_source_file("pl_main_linux.c")
-            with pl.compiler("clang", pl.Compiler.CLANG):
-                project_commons()
-                config_commons()
-                clang_project_commons()
-                pl.add_source_file("../out/pilotlight.c.o")
-                pl.add_source_file("pl_main_macos.m")
+            with pl.platform(pl.PlatformType.WIN32):
+                with pl.compiler("msvc", pl.CompilerType.MSVC):
+                    msvc_project_commons()
+                    msvc_config_commons()
+                    project_commons()
+                    config_commons()
+                    pl.add_definition("_DEBUG")
+                    pl.add_definition("PL_VULKAN_BACKEND")
+            with pl.platform(pl.PlatformType.LINUX):
+                with pl.compiler("gcc", pl.CompilerType.GCC):
+                    project_commons()
+                    gcc_project_commons()
+                    config_commons()
+                    pl.add_source_file("../out/pilotlight.c.o")
+                    pl.add_source_file("pl_main_linux.c")
+            with pl.platform(pl.PlatformType.MACOS):
+                with pl.compiler("clang", pl.CompilerType.CLANG):
+                    project_commons()
+                    config_commons()
+                    clang_project_commons()
+                    pl.add_source_file("../out/pilotlight.c.o")
+                    pl.add_source_file("pl_main_macos.m")
 
         with pl.configuration("debugdx11"):
-            with pl.compiler("msvc", pl.Compiler.MSVC):
-                msvc_project_commons()
-                msvc_config_commons()
-                project_commons()
-                config_commons()
-                pl.add_definition("PL_DX11_BACKEND")
+            with pl.platform(pl.PlatformType.WIN32):
+                with pl.compiler("msvc", pl.CompilerType.MSVC):
+                    msvc_project_commons()
+                    msvc_config_commons()
+                    project_commons()
+                    config_commons()
+                    pl.add_definition("PL_DX11_BACKEND")
            
-pl.generate_msvc_build()
+pl.generate_win32_build()
 pl.generate_linux_build()
 pl.generate_macos_build()
