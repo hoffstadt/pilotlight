@@ -231,7 +231,7 @@ pl_app_update(plAppData* appData)
     // create render command encoder
     id<MTLRenderCommandEncoder> renderEncoder = [commandBuffer renderCommandEncoderWithDescriptor:appData->drawableRenderDescriptor];
 
-    appData->ptDrawExtApi->pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){100.0f, 100.0f}, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, "extension baby");
+    appData->ptDrawExtApi->pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){100.0f, 100.0f}, (plVec4){255U, 255U, 0U, 255U}, "extension baby");
 
     // draw profiling info
     pl_begin_profile_sample("Draw Profiling Info");
@@ -240,22 +240,22 @@ pl_app_update(plAppData* appData)
     for(uint32_t i = 0u; i < pl_sb_size(appData->tProfileCtx.ptLastFrame->sbtSamples); i++)
     {
         plProfileSample* tPSample = &appData->tProfileCtx.ptLastFrame->sbtSamples[i];
-        pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){10.0f + (float)tPSample->uDepth * 15.0f, 50.0f + (float)i * 15.0f}, (plVec4){1.0f, 1.0f, 1.0f, 1.0f}, tPSample->pcName, 0.0f);
+        pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){10.0f + (float)tPSample->uDepth * 15.0f, 50.0f + (float)i * 15.0f}, (plVec4){255U, 255U, 255U, 255U}, tPSample->pcName, 0.0f);
         plVec2 sampleTextSize = pl_calculate_text_size(&appData->fontAtlas.sbFonts[0], 13.0f, tPSample->pcName, 0.0f);
         pl_sprintf(cPProfileValue, ": %0.5f", tPSample->dDuration);
-        pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){sampleTextSize.x + 15.0f + (float)tPSample->uDepth * 15.0f, 50.0f + (float)i * 15.0f}, (plVec4){1.0f, 1.0f, 1.0f, 1.0f}, cPProfileValue, 0.0f);
+        pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){sampleTextSize.x + 15.0f + (float)tPSample->uDepth * 15.0f, 50.0f + (float)i * 15.0f}, (plVec4){255U, 255U, 255U, 255U}, cPProfileValue, 0.0f);
     }
     pl_end_profile_sample();
 
     // draw commands
     pl_begin_profile_sample("Add draw commands");
-    pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){300.0f, 10.0f}, (plVec4){0.1f, 0.5f, 0.0f, 1.0f}, "Pilot Light\nGraphics", 0.0f);
-    pl_add_triangle_filled(appData->bgDrawLayer, (plVec2){300.0f, 50.0f}, (plVec2){300.0f, 150.0f}, (plVec2){350.0f, 50.0f}, (plVec4){1.0f, 0.0f, 0.0f, 1.0f});
+    pl_add_text(appData->fgDrawLayer, &appData->fontAtlas.sbFonts[0], 13.0f, (plVec2){300.0f, 10.0f}, (plVec4){60U, 175U, 0U, 255}, "Pilot Light\nGraphics", 0.0f);
+    pl_add_triangle_filled(appData->bgDrawLayer, (plVec2){300.0f, 50.0f}, (plVec2){300.0f, 150.0f}, (plVec2){350.0f, 50.0f}, (plVec4){255U, 0U, 0U, 255U});
     pl__begin_profile_sample("Calculate text size");
     plVec2 textSize = pl_calculate_text_size(&appData->fontAtlas.sbFonts[0], 13.0f, "Pilot Light\nGraphics", 0.0f);
     pl__end_profile_sample();
-    pl_add_rect_filled(appData->bgDrawLayer, (plVec2){300.0f, 10.0f}, (plVec2){300.0f + textSize.x, 10.0f + textSize.y}, (plVec4){0.0f, 0.0f, 0.8f, 0.5f});
-    pl_add_line(appData->bgDrawLayer, (plVec2){500.0f, 10.0f}, (plVec2){10.0f, 500.0f}, (plVec4){1.0f, 1.0f, 1.0f, 0.5f}, 2.0f);
+    pl_add_rect_filled(appData->bgDrawLayer, (plVec2){300.0f, 10.0f}, (plVec2){300.0f + textSize.x, 10.0f + textSize.y}, (plVec4){0U, 0U, 200U, 127U});
+    pl_add_line(appData->bgDrawLayer, (plVec2){500.0f, 10.0f}, (plVec2){10.0f, 500.0f}, (plVec4){255U, 255U, 255U, 127U}, 2.0f);
     pl_end_profile_sample();
 
     // submit draw layers

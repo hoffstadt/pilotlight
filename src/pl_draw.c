@@ -884,16 +884,19 @@ pl__reserve_triangles(plDrawLayer* layer, uint32_t indexCount, uint32_t vertexCo
 static void
 pl__add_vertex(plDrawLayer* layer, plVec2 pos, plVec4 color, plVec2 uv)
 {
+    uint32_t tcolor;
+    tcolor = (uint32_t) color.r;
+    tcolor |= (uint32_t) color.g << 8;
+    tcolor |= (uint32_t) color.b << 16;
+    tcolor |= (uint32_t) color.a << 24;
+
     pl_sb_push(layer->drawlist->sbVertexBuffer,
     ((plDrawVertex){
         .pos[0] = pos.x,
         .pos[1] = pos.y,
         .uv[0] = uv.u,
         .uv[1] = uv.v,
-        .color[0] = color.r,
-        .color[1] = color.g,
-        .color[2] = color.b,
-        .color[3] = color.a
+        .color = tcolor,
     })
     );
 }

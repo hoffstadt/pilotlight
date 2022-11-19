@@ -514,12 +514,12 @@ pl_setup_drawlist_vulkan(plDrawList* drawlist, VkRenderPass tRenderPass)
     VkVertexInputAttributeDescription attributeDescriptions[] = {
         {0u, 0u, VK_FORMAT_R32G32_SFLOAT, 0u},
         {1u, 0u, VK_FORMAT_R32G32_SFLOAT, 8u},
-        {2u, 0u, VK_FORMAT_R32G32B32A32_SFLOAT, 16u}
+        {2u, 0u, VK_FORMAT_R8G8B8A8_UNORM, 16u}
     };
     
     VkVertexInputBindingDescription bindingDescription = {
         .binding = 0u,
-        .stride = sizeof(float)*8u,
+        .stride = sizeof(plDrawVertex),
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
     };
 

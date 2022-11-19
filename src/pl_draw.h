@@ -131,7 +131,7 @@ typedef struct _plDrawVertex
 {
     float pos[2];
     float uv[2];
-    float color[4];
+    uint32_t color;
 } plDrawVertex;
 
 typedef struct _plFontRange
