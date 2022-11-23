@@ -177,7 +177,7 @@ static inline float pl_length_vec4      (plVec4 tVec)                { return sq
 // binary ops
 static inline float  pl_dot_vec2        (plVec2 tVec1, plVec2 tVec2) { return tVec1.x * tVec2.x + tVec1.y * tVec2.y; }
 static inline float  pl_dot_vec3        (plVec3 tVec1, plVec3 tVec2) { return tVec1.x * tVec2.x + tVec1.y * tVec2.y + tVec1.z * tVec2.z; }
-static inline float  pl_dot_vec4        (plVec4 tVec1, plVec4 tVec2) { return tVec1.x * tVec2.x + tVec1.y * tVec2.y, tVec1.z * tVec2.z + tVec1.w * tVec2.w; }
+static inline float  pl_dot_vec4        (plVec4 tVec1, plVec4 tVec2) { return tVec1.x * tVec2.x + tVec1.y * tVec2.y + tVec1.z * tVec2.z + tVec1.w * tVec2.w; }
 static inline plVec3 pl_cross_vec3      (plVec3 tVec1, plVec3 tVec2) { return (plVec3){tVec1.y * tVec2.z - tVec2.y * tVec1.z, tVec1.z * tVec2.x - tVec2.z * tVec1.x, tVec1.x * tVec2.y - tVec2.x * tVec1.y}; }
 
 static inline plVec2 pl_add_vec2        (plVec2 tVec1, plVec2 tVec2) { return (plVec2){tVec1.x + tVec2.x, tVec1.y + tVec2.y}; }
