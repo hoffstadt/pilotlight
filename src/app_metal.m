@@ -20,7 +20,6 @@ Index of this file:
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 #include "pilotlight.h"
-#include "pl_graphics_metal.h"
 #include "pl_ds.h"
 #include "pl_io.h"
 #include "pl_profile.h"
