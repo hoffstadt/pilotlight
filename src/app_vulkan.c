@@ -33,6 +33,7 @@ Index of this file:
 
 // extensions
 #include "pl_draw_extension.h"
+#include "pl_gltf_ext.h"
 
 //-----------------------------------------------------------------------------
 // [SECTION] structs
@@ -41,7 +42,7 @@ Index of this file:
 typedef struct _plAppData
 {
     plGraphics          tGraphics;
-    plDrawContext       tCtx;
+    plDrawContext       ctx;
     plDrawList          drawlist;
     plDrawLayer*        fgDrawLayer;
     plDrawLayer*        bgDrawLayer;
@@ -51,12 +52,33 @@ typedef struct _plAppData
     plMemoryContext     tMemoryCtx;
     plDataRegistry      tDataRegistryCtx;
     plExtensionRegistry tExtensionRegistryCtx;
-    plCamera            tCamera;
 
     // extension apis
     plDrawExtension* ptDrawExtApi;
 
+    // testing
+    plCamera        tCamera;
+    uint32_t        ulConstantBuffer;
+    uint32_t        ulColorTexture;
+
+    // new
+    plShader     tShader0;
+    plShader     tShader1;
+    plBindGroup  tBindGroup0;
+    plDraw*      sbtDraws;
+    plDrawArea*  sbtDrawAreas;
+    plMat4*      sbtModelMats;
+    plGltf       tGltf;
 } plAppData;
+
+typedef struct _plTransforms
+{
+    plMat4 tModel;
+    plMat4 tModelView;
+    plMat4 tModelViewProjection;
+} plTransforms;
+
+static inline float frandom(float fMax){ return (float)rand()/(float)(RAND_MAX/fMax);}
 
 //-----------------------------------------------------------------------------
 // [SECTION] pl_app_load
@@ -124,19 +146,112 @@ pl_app_setup(plAppData* ptAppData)
     pl_setup_graphics(&ptAppData->tGraphics);
     
     // setup drawing api
-    pl_initialize_draw_context_vulkan(&ptAppData->tCtx, ptAppData->tGraphics.tDevice.tPhysicalDevice, 3, ptAppData->tGraphics.tDevice.tLogicalDevice);
-    pl_register_drawlist(&ptAppData->tCtx, &ptAppData->drawlist);
+    pl_initialize_draw_context_vulkan(&ptAppData->ctx, ptAppData->tGraphics.tDevice.tPhysicalDevice, 3, ptAppData->tGraphics.tDevice.tLogicalDevice);
+    pl_register_drawlist(&ptAppData->ctx, &ptAppData->drawlist);
     pl_setup_drawlist_vulkan(&ptAppData->drawlist, ptAppData->tGraphics.tRenderPass, ptAppData->tGraphics.tSwapchain.tMsaaSamples);
     ptAppData->bgDrawLayer = pl_request_draw_layer(&ptAppData->drawlist, "Background Layer");
     ptAppData->fgDrawLayer = pl_request_draw_layer(&ptAppData->drawlist, "Foreground Layer");
 
     // create font atlas
     pl_add_default_font(&ptAppData->fontAtlas);
-    pl_build_font_atlas(&ptAppData->tCtx, &ptAppData->fontAtlas);
+    pl_build_font_atlas(&ptAppData->ctx, &ptAppData->fontAtlas);
 
-    // camera
-    ptAppData->tCamera = pl_create_perspective_camera((plVec3){0.0f, 0.0f, 8.5f}, PL_PI_3, ptIOCtx->afMainViewportSize[0] / ptIOCtx->afMainViewportSize[1], 0.01f, 400.0f);
+    // testing
+    ptAppData->tCamera = pl_create_perspective_camera((plVec3){0.0f, 0.0f, 8.5f}, PL_PI_3, ptIOCtx->afMainViewportSize[0] / ptIOCtx->afMainViewportSize[1], 0.1f, 100.0f);
 
+    // pl_ext_load_gltf(&ptAppData->tGraphics, "../../mvImporter/data/glTF-Sample-Models/2.0/Sponza/glTF/Sponza.gltf", &ptAppData->tGltf);
+    // pl_ext_load_gltf(&ptAppData->tGraphics, "../../mvImporter/data/glTF-Sample-Models/2.0/DamagedHelmet/glTF/DamagedHelmet.gltf", &ptAppData->tGltf);
+    pl_ext_load_gltf(&ptAppData->tGraphics, "../data/glTF-Sample-Models-master/2.0/FlightHelmet/glTF/FlightHelmet.gltf", &ptAppData->tGltf);
+
+    ptAppData->ulConstantBuffer = pl_create_constant_buffer(&ptAppData->tGraphics.tResourceManager, sizeof(plTransforms), ptAppData->tGraphics.uFramesInFlight * pl_sb_size(ptAppData->tGltf.sbtMeshes));
+
+    pl_sb_reserve(ptAppData->sbtDraws, pl_sb_size(ptAppData->tGltf.sbtMeshes));
+    for(uint32_t i = 0; i < pl_sb_size(ptAppData->tGltf.sbtMeshes); i++)
+    {
+        pl_sb_push(ptAppData->sbtModelMats, pl_identity_mat4()); 
+        pl_sb_push(ptAppData->sbtDraws, ((plDraw){
+            .ptShader     = ptAppData->tGltf.sbtHasTangent[i] ? &ptAppData->tShader0 : &ptAppData->tShader1,
+            .ptMesh       = &ptAppData->tGltf.sbtMeshes[i],
+            .ptBindGroup2 = &ptAppData->tGltf.sbtBindGroups[i]
+            }));
+    }
+
+    pl_sb_push(ptAppData->sbtDrawAreas, ((plDrawArea){
+        .ptBindGroup0 = &ptAppData->tBindGroup0,
+        .uDrawOffset  = 0,
+        .uDrawCount   = pl_sb_size(ptAppData->tGltf.sbtMeshes)
+    }));
+
+    // create bind group layouts
+    static plBufferBinding tBufferBindings[] = {
+        {
+            .tType       = PL_BUFFER_BINDING_TYPE_UNIFORM,
+            .uSlot       = 0,
+            .tStageFlags = VK_SHADER_STAGE_VERTEX_BIT
+        }
+    };
+
+    static plBufferBinding tBufferBindings2[] = {
+        {
+            .tType       = PL_BUFFER_BINDING_TYPE_STORAGE,
+            .uSlot       = 0,
+            .tStageFlags = VK_SHADER_STAGE_VERTEX_BIT
+        }
+    };
+
+    static plTextureBinding tTextureBindings[] = {
+        {
+            .tType       = PL_TEXTURE_BINDING_TYPE_SAMPLED,
+            .uSlot       = 1,
+            .tStageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+        }
+    };
+
+    static plBindGroupLayout atGroupLayouts[] = {
+        {
+            .uBufferCount = 1,
+            .aBuffers      = tBufferBindings,
+            .uTextureCount = 0
+        },
+        {
+            .uBufferCount = 1,
+            .aBuffers      = tBufferBindings2,
+            .uTextureCount = 1,
+            .aTextures     = tTextureBindings
+        }
+    };
+
+    pl_create_bind_group(&ptAppData->tGraphics, &atGroupLayouts[0], &ptAppData->tBindGroup0);
+    pl_create_bind_group(&ptAppData->tGraphics, &atGroupLayouts[1], NULL);
+
+    // create shaders
+    plShaderDesc tShaderDesc = {
+        ._tRenderPass                       = ptAppData->tGraphics.tRenderPass,
+        .pcPixelShader                      = "simple.frag.spv",
+        .pcVertexShader                     = "simple.vert.spv",
+        .tMeshFormatFlags0                  = PL_MESH_FORMAT_FLAG_HAS_POSITION,
+        .tMeshFormatFlags1                  = PL_MESH_FORMAT_FLAG_HAS_NORMAL | PL_MESH_FORMAT_FLAG_HAS_TEXCOORD | PL_MESH_FORMAT_FLAG_HAS_TANGENT,
+        .tGraphicsState.bDepthEnabled       = true,
+        .tGraphicsState.bFrontFaceClockWise = false,
+        .tGraphicsState.fDepthBias          = 0.0f,
+        .tGraphicsState.tBlendMode          = PL_BLEND_MODE_ALPHA,
+        .tGraphicsState.tCullMode           = VK_CULL_MODE_BACK_BIT,
+        .atBindGroupLayouts                 = atGroupLayouts,
+        .uBindGroupLayoutCount              = 2
+    };
+    pl_create_shader(&ptAppData->tGraphics, &tShaderDesc, &ptAppData->tShader0);
+    tShaderDesc.tMeshFormatFlags1 = PL_MESH_FORMAT_FLAG_HAS_NORMAL | PL_MESH_FORMAT_FLAG_HAS_TEXCOORD;
+    pl_create_shader(&ptAppData->tGraphics, &tShaderDesc, &ptAppData->tShader1);
+
+    // just to reuse the above
+    tBufferBindings[0].tBuffer = ptAppData->tGraphics.tResourceManager.sbtBuffers[ptAppData->ulConstantBuffer];
+    tBufferBindings[0].szSize  = sizeof(plTransforms);
+
+    plBindUpdate tBindUpdate = {
+        .uBufferCount = 1,
+        .aBuffers      = tBufferBindings
+    };
+    pl_update_bind_group(&ptAppData->tGraphics, &ptAppData->tBindGroup0, &tBindUpdate);
 }
 
 //-----------------------------------------------------------------------------
@@ -147,8 +262,16 @@ PL_EXPORT void
 pl_app_shutdown(plAppData* ptAppData)
 {
     vkDeviceWaitIdle(ptAppData->tGraphics.tDevice.tLogicalDevice);
+
+    for(uint32_t i = 0; i < pl_sb_size(ptAppData->tGltf.sbtBindGroups); i++)
+    {
+        vkDestroyDescriptorSetLayout(ptAppData->tGraphics.tDevice.tLogicalDevice, ptAppData->tGltf.sbtBindGroups[i].tLayout._tDescriptorSetLayout, NULL);
+    }
+
     pl_cleanup_font_atlas(&ptAppData->fontAtlas);
-    pl_cleanup_draw_context(&ptAppData->tCtx);
+    pl_cleanup_draw_context(&ptAppData->ctx);
+    pl_cleanup_shader(&ptAppData->tGraphics, &ptAppData->tShader0);
+    pl_cleanup_shader(&ptAppData->tGraphics, &ptAppData->tShader1);
     pl_cleanup_graphics(&ptAppData->tGraphics);
     pl_cleanup_profile_context();
     pl_cleanup_extension_registry();
@@ -176,11 +299,11 @@ pl_app_resize(plAppData* ptAppData)
 PL_EXPORT void
 pl_app_update(plAppData* ptAppData)
 {
-    pl_begin_profile_frame(ptAppData->tCtx.frameCount);
+    pl_begin_profile_frame(ptAppData->ctx.frameCount);
     plIOContext* ptIOCtx = pl_get_io_context();
     pl_handle_extension_reloads();
     pl_new_io_frame();
-    pl_new_draw_frame(&ptAppData->tCtx);
+    pl_new_draw_frame(&ptAppData->ctx);
     pl_process_cleanup_queue(&ptAppData->tGraphics.tResourceManager, 1);
 
     plFrameContext* ptCurrentFrame = pl_get_frame_resources(&ptAppData->tGraphics);
@@ -192,12 +315,12 @@ pl_app_update(plAppData* ptAppData)
         pl_begin_main_pass(&ptAppData->tGraphics);
 
         static const float fCameraTravelSpeed = 8.0f;
-        if(pl_is_key_pressed(PL_KEY_W, true)) pl_camera_translate(&ptAppData->tCamera,  0.0f,  0.0f,  fCameraTravelSpeed * ptIOCtx->fDeltaTime);
-        if(pl_is_key_pressed(PL_KEY_S, true)) pl_camera_translate(&ptAppData->tCamera,  0.0f,  0.0f, -fCameraTravelSpeed* ptIOCtx->fDeltaTime);
-        if(pl_is_key_pressed(PL_KEY_A, true)) pl_camera_translate(&ptAppData->tCamera, -fCameraTravelSpeed * ptIOCtx->fDeltaTime,  0.0f,  0.0f);
-        if(pl_is_key_pressed(PL_KEY_D, true)) pl_camera_translate(&ptAppData->tCamera,  fCameraTravelSpeed * ptIOCtx->fDeltaTime,  0.0f,  0.0f);
-        if(pl_is_key_pressed(PL_KEY_F, true)) pl_camera_translate(&ptAppData->tCamera,  0.0f, -fCameraTravelSpeed * ptIOCtx->fDeltaTime,  0.0f);
-        if(pl_is_key_pressed(PL_KEY_R, true)) pl_camera_translate(&ptAppData->tCamera,  0.0f,  fCameraTravelSpeed * ptIOCtx->fDeltaTime,  0.0f);
+        if(pl_is_key_pressed(PL_KEY_W, true)) { pl_camera_translate(&ptAppData->tCamera,  0.0f,  0.0f,  fCameraTravelSpeed * ptIOCtx->fDeltaTime); }
+        if(pl_is_key_pressed(PL_KEY_S, true)) { pl_camera_translate(&ptAppData->tCamera,  0.0f,  0.0f, -fCameraTravelSpeed* ptIOCtx->fDeltaTime); }
+        if(pl_is_key_pressed(PL_KEY_A, true)) { pl_camera_translate(&ptAppData->tCamera, -fCameraTravelSpeed * ptIOCtx->fDeltaTime,  0.0f,  0.0f); }
+        if(pl_is_key_pressed(PL_KEY_D, true)) { pl_camera_translate(&ptAppData->tCamera,  fCameraTravelSpeed * ptIOCtx->fDeltaTime,  0.0f,  0.0f); }
+        if(pl_is_key_pressed(PL_KEY_F, true)) { pl_camera_translate(&ptAppData->tCamera,  0.0f, -fCameraTravelSpeed * ptIOCtx->fDeltaTime,  0.0f); }
+        if(pl_is_key_pressed(PL_KEY_R, true)) { pl_camera_translate(&ptAppData->tCamera,  0.0f,  fCameraTravelSpeed * ptIOCtx->fDeltaTime,  0.0f); }
 
         if(pl_is_mouse_dragging(PL_MOUSE_BUTTON_LEFT, -0.0f))
         {
@@ -206,39 +329,32 @@ pl_app_update(plAppData* ptAppData)
             pl_reset_mouse_drag_delta(PL_MOUSE_BUTTON_LEFT);
         }
 
-        static char pcCameraPos[256] = {0};
-        pl_sprintf(pcCameraPos, "Pos: %.3f, %.3f, %.3f", ptAppData->tCamera.tPos.x, ptAppData->tCamera.tPos.y, ptAppData->tCamera.tPos.z);
-        pl_add_text(ptAppData->fgDrawLayer, &ptAppData->fontAtlas.sbFonts[0], 13.0f, (plVec2){400.0f, 10.0f}, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, pcCameraPos, 0.0f);
+        uint32_t uCurrentDraw = 0;
 
-        pl_sprintf(pcCameraPos, "Pitch: %.3f, Yaw: %.3f, Roll:%.3f", ptAppData->tCamera.fPitch, ptAppData->tCamera.fYaw, ptAppData->tCamera.fRoll);
-        pl_add_text(ptAppData->fgDrawLayer, &ptAppData->fontAtlas.sbFonts[0], 13.0f, (plVec2){400.0f, 25.0f}, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, pcCameraPos, 0.0f);
+        for(uint32_t i = 0; i < pl_sb_size(ptAppData->tGltf.sbtMeshes); i++)
+        {
+            const uint32_t uConstantBufferOffset = pl_sb_size(ptAppData->tGltf.sbtMeshes) * sizeof(plTransforms) * (uint32_t)ptAppData->tGraphics.szCurrentFrameIndex + uCurrentDraw * sizeof(plTransforms);
 
-        pl_sprintf(pcCameraPos, "Up: %.3f, %.3f, %.3f", ptAppData->tCamera._tUpVec.x, ptAppData->tCamera._tUpVec.y, ptAppData->tCamera._tUpVec.z);
-        pl_add_text(ptAppData->fgDrawLayer, &ptAppData->fontAtlas.sbFonts[0], 13.0f, (plVec2){400.0f, 40.0f}, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, pcCameraPos, 0.0f);
+            plTransforms tTransforms = {
+                .tModel     = ptAppData->sbtModelMats[i],
+                .tModelView = pl_mul_mat4(&ptAppData->tCamera.tViewMat, &ptAppData->sbtModelMats[i])
+            };
+            tTransforms.tModelViewProjection = pl_mul_mat4(&ptAppData->tCamera.tProjMat, &tTransforms.tModelView);
+            memcpy(&ptAppData->tGraphics.tResourceManager.sbtBuffers[ptAppData->ulConstantBuffer].pucMapping[uConstantBufferOffset], &tTransforms, sizeof(plTransforms));
 
-        pl_sprintf(pcCameraPos, "Forward: %.3f, %.3f, %.3f", ptAppData->tCamera._tForwardVec.x, ptAppData->tCamera._tForwardVec.y, ptAppData->tCamera._tForwardVec.z);
-        pl_add_text(ptAppData->fgDrawLayer, &ptAppData->fontAtlas.sbFonts[0], 13.0f, (plVec2){400.0f, 55.0f}, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, pcCameraPos, 0.0f);
+            ptAppData->sbtDraws[uCurrentDraw].uDynamicBufferOffset0 = uConstantBufferOffset;
+            uCurrentDraw++;
+        }
 
-        pl_sprintf(pcCameraPos, "Right: %.3f, %.3f, %.3f", ptAppData->tCamera._tRightVec.x, ptAppData->tCamera._tRightVec.y, ptAppData->tCamera._tRightVec.z);
-        pl_add_text(ptAppData->fgDrawLayer, &ptAppData->fontAtlas.sbFonts[0], 13.0f, (plVec2){400.0f, 70.0f}, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, pcCameraPos, 0.0f);
+
+        pl_draw_areas(&ptAppData->tGraphics, pl_sb_size(ptAppData->sbtDrawAreas), ptAppData->sbtDrawAreas, ptAppData->sbtDraws);
 
         ptAppData->ptDrawExtApi->pl_add_text(ptAppData->fgDrawLayer, &ptAppData->fontAtlas.sbFonts[0], 13.0f, (plVec2){100.0f, 100.0f}, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, "extension baby");
 
         // draw profiling info
-        pl_begin_profile_sample("Draw Profiling Info");
         static char pcDeltaTime[64] = {0};
         pl_sprintf(pcDeltaTime, "%.6f ms", ptIOCtx->fDeltaTime);
         pl_add_text(ptAppData->fgDrawLayer, &ptAppData->fontAtlas.sbFonts[0], 13.0f, (plVec2){10.0f, 10.0f}, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, pcDeltaTime, 0.0f);
-        char cPProfileValue[64] = {0};
-        for(uint32_t i = 0u; i < pl_sb_size(ptAppData->tProfileCtx.ptLastFrame->sbtSamples); i++)
-        {
-            plProfileSample* tPSample = &ptAppData->tProfileCtx.ptLastFrame->sbtSamples[i];
-            pl_add_text(ptAppData->fgDrawLayer, &ptAppData->fontAtlas.sbFonts[0], 13.0f, (plVec2){10.0f + (float)tPSample->uDepth * 15.0f, 50.0f + (float)i * 15.0f}, (plVec4){1.0f, 1.0f, 1.0f, 1.0f}, tPSample->pcName, 0.0f);
-            plVec2 sampleTextSize = pl_calculate_text_size(&ptAppData->fontAtlas.sbFonts[0], 13.0f, tPSample->pcName, 0.0f);
-            pl_sprintf(cPProfileValue, ": %0.5f", tPSample->dDuration);
-            pl_add_text(ptAppData->fgDrawLayer, &ptAppData->fontAtlas.sbFonts[0], 13.0f, (plVec2){sampleTextSize.x + 15.0f + (float)tPSample->uDepth * 15.0f, 50.0f + (float)i * 15.0f}, (plVec4){1.0f, 1.0f, 1.0f, 1.0f}, cPProfileValue, 0.0f);
-        }
-        pl_end_profile_sample();
 
         // draw commands
         pl_begin_profile_sample("Add draw commands");

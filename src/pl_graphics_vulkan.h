@@ -28,7 +28,6 @@ Index of this file:
 #else // linux
     #define VK_USE_PLATFORM_XCB_KHR
 #endif
-
 #include "vulkan/vulkan.h"
 
 #ifndef PL_VULKAN
@@ -46,12 +45,26 @@ PL_DECLARE_STRUCT(plDevice);          // device resources & info
 PL_DECLARE_STRUCT(plGraphics);        // graphics context
 PL_DECLARE_STRUCT(plFrameContext);    // per frame resource
 PL_DECLARE_STRUCT(plResourceManager); // buffer/texture resource manager
-PL_DECLARE_STRUCT(plBuffer);          // vulkan buffer
-PL_DECLARE_STRUCT(plTexture);         // vulkan texture
-PL_DECLARE_STRUCT(plTextureDesc);     // texture descriptor
+PL_DECLARE_STRUCT(plBuffer);
+PL_DECLARE_STRUCT(plTexture);
+PL_DECLARE_STRUCT(plTextureDesc);
+PL_DECLARE_STRUCT(plBufferBinding);
+PL_DECLARE_STRUCT(plTextureBinding);
+PL_DECLARE_STRUCT(plShaderDesc);
+PL_DECLARE_STRUCT(plShader);
+PL_DECLARE_STRUCT(plGraphicsState);
+PL_DECLARE_STRUCT(plBindGroupLayout);
+PL_DECLARE_STRUCT(plBindGroup);
+PL_DECLARE_STRUCT(plBindUpdate);
+PL_DECLARE_STRUCT(plMesh);
+PL_DECLARE_STRUCT(plDraw);
+PL_DECLARE_STRUCT(plDrawArea);
 
 // enums
+typedef int plBufferBindingType;
+typedef int plTextureBindingType;
 typedef int plBufferUsage;
+typedef int plMeshFormatFlags;
 typedef int plBlendMode;
 
 //-----------------------------------------------------------------------------
@@ -91,6 +104,17 @@ void                  pl_submit_texture_for_deletion(plResourceManager* ptResour
 VkCommandBuffer       pl_begin_command_buffer      (plGraphics* ptGraphics, plDevice* ptDevice);
 void                  pl_submit_command_buffer     (plGraphics* ptGraphics, plDevice* ptDevice, VkCommandBuffer tCmdBuffer);
 
+// shaders
+void                  pl_create_shader             (plGraphics* ptGraphics, const plShaderDesc* ptDesc, plShader* ptShaderOut);
+void                  pl_cleanup_shader            (plGraphics* ptGraphics, plShader* ptShader);
+
+// descriptors
+void                  pl_create_bind_group         (plGraphics* ptGraphics, plBindGroupLayout* ptLayout, plBindGroup* ptGroupOut);
+void                  pl_update_bind_group         (plGraphics* ptGraphics, plBindGroup* ptGroup, plBindUpdate* ptBindings);
+
+// drawing
+void                  pl_draw_areas                (plGraphics* ptGraphics, uint32_t uAreaCount, plDrawArea* atAreas, plDraw* atDraws);
+
 // misc
 plFrameContext*       pl_get_frame_resources       (plGraphics* ptGraphics);
 uint32_t              pl_find_memory_type          (VkPhysicalDeviceMemoryProperties tMemProps, uint32_t uTypeFilter, VkMemoryPropertyFlags tProperties);
@@ -103,6 +127,18 @@ VkSampleCountFlagBits pl_get_max_sample_count      (plDevice* ptDevice);
 //-----------------------------------------------------------------------------
 // [SECTION] enums
 //-----------------------------------------------------------------------------
+
+enum plBufferBindingType_
+{
+    PL_BUFFER_BINDING_TYPE_UNIFORM,
+    PL_BUFFER_BINDING_TYPE_STORAGE
+};
+
+enum plTextureBindingType_
+{
+    PL_TEXTURE_BINDING_TYPE_SAMPLED,
+    PL_TEXTURE_BINDING_TYPE_STORAGE
+};
 
 enum plBufferUsage_
 {
@@ -125,9 +161,49 @@ enum plBlendMode_
     PL_BLEND_MODE_COUNT
 };
 
+enum plMeshFormatFlags_
+{
+    PL_MESH_FORMAT_FLAG_NONE           = 0,
+    PL_MESH_FORMAT_FLAG_HAS_POSITION   = 1 << 0,
+    PL_MESH_FORMAT_FLAG_HAS_NORMAL     = 1 << 1,
+    PL_MESH_FORMAT_FLAG_HAS_TEXCOORD   = 1 << 2,
+    PL_MESH_FORMAT_FLAG_HAS_COLOR      = 1 << 3,
+    PL_MESH_FORMAT_FLAG_HAS_TEXCOORD_2 = 1 << 4,
+    PL_MESH_FORMAT_FLAG_HAS_TANGENT    = 1 << 5,
+};
+
 //-----------------------------------------------------------------------------
 // [SECTION] structs
 //-----------------------------------------------------------------------------
+
+typedef struct _plMesh
+{
+    uint32_t uVertexBuffers[2];
+    uint32_t uIndexBuffer;
+    uint32_t uVertexOffset;
+    uint32_t uVertexCount;
+    uint32_t uIndexOffset;
+    uint32_t uIndexCount;
+} plMesh;
+
+typedef struct _plDrawArea
+{
+    VkViewport   tViewport;
+    VkRect2D     tScissor;
+    plBindGroup* ptBindGroup0;
+    uint32_t     uDrawOffset;
+    uint32_t     uDrawCount;
+} plDrawArea;
+
+typedef struct _plDraw
+{
+    plMesh*      ptMesh;
+    plBindGroup* ptBindGroup1;
+    plBindGroup* ptBindGroup2;
+    plShader*    ptShader;
+    uint32_t     uDynamicBufferOffset0;
+    uint32_t     uDynamicBufferOffset1;
+} plDraw;
 
 typedef struct _plTextureDesc
 {
@@ -159,13 +235,85 @@ typedef struct _plBuffer
     unsigned char* pucMapping;
 } plBuffer;
 
+typedef struct _plBufferBinding
+{
+    plBufferBindingType tType;
+    uint32_t            uSlot;
+    VkShaderStageFlags  tStageFlags;
+    size_t              szSize;
+    size_t              szOffset;
+    plBuffer            tBuffer;
+} plBufferBinding;
+
+typedef struct _plTextureBinding
+{
+    plTextureBindingType tType;
+    uint32_t             uSlot;
+    VkShaderStageFlags   tStageFlags;
+    plTexture            tTexture;
+    VkSampler            tSampler;
+} plTextureBinding;
+
+typedef struct _plBindGroupLayout
+{
+    uint32_t              uTextureCount;
+    uint32_t              uBufferCount;
+    plTextureBinding*     aTextures;
+    plBufferBinding*      aBuffers;
+    VkDescriptorSetLayout _tDescriptorSetLayout;
+} plBindGroupLayout;
+
+typedef struct _plBindUpdate
+{
+    uint32_t          uTextureCount;
+    uint32_t          uBufferCount;
+    plTextureBinding* aTextures;
+    plBufferBinding*  aBuffers;
+} plBindUpdate;
+
+typedef struct _plBindGroup
+{
+    plBindGroupLayout tLayout;
+    VkDescriptorSet   _tDescriptorSet;
+} plBindGroup;
+
+typedef struct _plGraphicsState
+{
+    bool            bDepthEnabled;
+    bool            bFrontFaceClockWise;
+    float           fDepthBias;
+    plBlendMode     tBlendMode;
+    VkCullModeFlags tCullMode;
+} plGraphicsState;
+
+typedef struct _plShaderDesc
+{
+    const char*        pcVertexShader;
+    const char*        pcPixelShader;
+    plMeshFormatFlags  tMeshFormatFlags0;
+    plMeshFormatFlags  tMeshFormatFlags1;
+    plGraphicsState    tGraphicsState;
+    plBindGroupLayout* atBindGroupLayouts;
+    uint32_t           uBindGroupLayoutCount;
+    VkRenderPass       _tRenderPass;
+} plShaderDesc;
+
+typedef struct _plShader
+{
+    plShaderDesc     tDesc;
+    VkPipelineLayout _tPipelineLayout;
+    VkPipeline       _tPipeline;
+} plShader;
+
 typedef struct _plResourceManager
 {
 
-    plBuffer*  sbtBuffers;
+    plBuffer* sbtBuffers;
     plTexture* sbtTextures;
 
     // [INTERNAL]
+
+    // buffers
     uint32_t* _sbulBufferFreeIndices;
     uint32_t* _sbulBufferDeletionQueue;
     uint32_t* _sbulTextureFreeIndices;

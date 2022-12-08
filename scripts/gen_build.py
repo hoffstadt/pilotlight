@@ -13,7 +13,7 @@ with pl.project("pilotlight"):
     pl.add_configuration("debugmetal") # only used on macos for vulkan
 
     # where to output build scripts
-    pl.set_working_directory(".")
+    pl.set_working_directory("../src")
 
     # used to decide hot reloading
     pl.set_main_target("pilot_light")
@@ -43,7 +43,7 @@ with pl.project("pilotlight"):
         pl.add_frameworks("Metal", "MetalKit", "Cocoa", "IOKit", "CoreVideo", "QuartzCore")
 
     def project_commons():
-        pl.add_include_directories("../out", "../dependencies/stb", "../src", "../extensions")
+        pl.add_include_directories("../out", "../dependencies/stb", "../dependencies/cgltf", "../src", "../extensions")
         pl.set_output_directory("../out")
         pl.add_link_directory("../out")
         pl.add_definitions("_USE_MATH_DEFINES", "PL_PROFILING_ON", "PL_ALLOW_HOT_RELOAD", "PL_ENABLE_VALIDATION_LAYERS")
@@ -224,6 +224,7 @@ with pl.project("pilotlight"):
 
         def config_commons():
             pl.set_output_binary("pilot_light")
+            pl.add_vulkan_glsl_files("../shaders/glsl/", "simple.frag", "simple.vert")
                
         with pl.configuration("debug"):
             with pl.platform(pl.PlatformType.WIN32):
