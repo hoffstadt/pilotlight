@@ -367,7 +367,7 @@ pl_begin_main_pass(plGraphics* ptGraphics)
     static const VkClearValue atClearValues[2] = 
     {
         {
-            .color.float32[0] = 0.1f,
+            .color.float32[0] = 0.0f,
             .color.float32[1] = 0.0f,
             .color.float32[2] = 0.0f,
             .color.float32[3] = 1.0f
@@ -510,7 +510,7 @@ pl_create_shader(plGraphics* ptGraphics, const plShaderDesc* ptDesc, plShader* p
         uCurrentInputOffset += sizeof(float) * 3;
     }
 
-    if(ptDesc->tMeshFormatFlags0 & PL_MESH_FORMAT_FLAG_HAS_TEXCOORD)
+    if(ptDesc->tMeshFormatFlags0 & PL_MESH_FORMAT_FLAG_HAS_TEXCOORD_0)
     {
         const VkVertexInputAttributeDescription tAttributeDescription =
         {
@@ -523,7 +523,7 @@ pl_create_shader(plGraphics* ptGraphics, const plShaderDesc* ptDesc, plShader* p
         uCurrentInputOffset += sizeof(float) * 2;
     }
 
-    if(ptDesc->tMeshFormatFlags0 & PL_MESH_FORMAT_FLAG_HAS_COLOR)
+    if(ptDesc->tMeshFormatFlags0 & PL_MESH_FORMAT_FLAG_HAS_COLOR_0)
     {
         const VkVertexInputAttributeDescription tAttributeDescription =
         {
@@ -536,7 +536,7 @@ pl_create_shader(plGraphics* ptGraphics, const plShaderDesc* ptDesc, plShader* p
         uCurrentInputOffset += sizeof(float) * 4;
     }
 
-    if(ptDesc->tMeshFormatFlags0 & PL_MESH_FORMAT_FLAG_HAS_TEXCOORD_2)
+    if(ptDesc->tMeshFormatFlags0 & PL_MESH_FORMAT_FLAG_HAS_TEXCOORD_1)
     {
         const VkVertexInputAttributeDescription tAttributeDescription =
         {
@@ -576,12 +576,29 @@ pl_create_shader(plGraphics* ptGraphics, const plShaderDesc* ptDesc, plShader* p
         .size       = sizeof(int)
     };
 
-    int data0 = ptDesc->tMeshFormatFlags1;
+    const VkSpecializationMapEntry tSpecializationEntry1 = {
+        .constantID = 1,
+        .offset     = sizeof(int),
+        .size       = sizeof(int)
+    };
+
+    int aiData[2] = {
+        ptDesc->tMeshFormatFlags1,
+        0
+    };
+
+    int iFlagCopy = ptDesc->tMeshFormatFlags1;
+    while(iFlagCopy)
+    {
+        aiData[1] += iFlagCopy & 1;
+        iFlagCopy >>= 1;
+    }
+
     VkSpecializationInfo tSpecializationInfo0 = {
-        .mapEntryCount = 1,
+        .mapEntryCount = 2,
         .pMapEntries   = &tSpecializationEntry0,
-        .dataSize      = sizeof(int),
-        .pData         = &data0
+        .dataSize      = sizeof(int) * 2,
+        .pData         = aiData
     };
 
     const VkPipelineVertexInputStateCreateInfo tVertexInputInfo = {
@@ -876,15 +893,30 @@ pl_draw_areas(plGraphics* ptGraphics, uint32_t uAreaCount, plDrawArea* atAreas, 
     vkCmdSetDepthBias(ptCurrentFrame->tCmdBuf, 0.0f, 0.0f, 0.0f);
 
     VkPipeline tLastPipeline = VK_NULL_HANDLE;
+    VkDescriptorSet tLastGlobalDescriptorSet = VK_NULL_HANDLE;
+    VkDescriptorSet tLastMaterialDescriptorSet = VK_NULL_HANDLE;
 
     for(uint32_t i = 0; i < uAreaCount; i++)
     {
         const plDrawArea* ptArea = &atAreas[i];
+
+        
         for(uint32_t j = 0; j < ptArea->uDrawCount; j++)
         {
             const plDraw* ptDraw = &atDraws[ptArea->uDrawOffset + j];
-            vkCmdBindDescriptorSets(ptCurrentFrame->tCmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, ptDraw->ptShader->_tPipelineLayout, 0, 1, &ptArea->ptBindGroup0->_tDescriptorSet, 1, &ptDraw->uDynamicBufferOffset0);
-            vkCmdBindDescriptorSets(ptCurrentFrame->tCmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, ptDraw->ptShader->_tPipelineLayout, 1, 1, &ptDraw->ptBindGroup2->_tDescriptorSet, 0, NULL);
+
+            if(tLastGlobalDescriptorSet != ptArea->ptBindGroup0->_tDescriptorSet)
+            {
+                vkCmdBindDescriptorSets(ptCurrentFrame->tCmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, ptDraw->ptShader->_tPipelineLayout, 0, 1, &ptArea->ptBindGroup0->_tDescriptorSet, 1, &ptArea->uDynamicBufferOffset0);
+                tLastGlobalDescriptorSet = ptArea->ptBindGroup0->_tDescriptorSet;
+            }
+            if(tLastMaterialDescriptorSet != ptDraw->ptBindGroup1->_tDescriptorSet)
+            {
+                vkCmdBindDescriptorSets(ptCurrentFrame->tCmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, ptDraw->ptShader->_tPipelineLayout, 1, 1, &ptDraw->ptBindGroup1->_tDescriptorSet, 1, &ptDraw->uDynamicBufferOffset1);
+                tLastMaterialDescriptorSet = ptDraw->ptBindGroup1->_tDescriptorSet;
+            }
+            
+            vkCmdBindDescriptorSets(ptCurrentFrame->tCmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, ptDraw->ptShader->_tPipelineLayout, 2, 1, &ptDraw->ptBindGroup2->_tDescriptorSet, 1, &ptDraw->uDynamicBufferOffset2);
         
             if(ptDraw->ptShader->_tPipeline != tLastPipeline)
             {
@@ -893,7 +925,7 @@ pl_draw_areas(plGraphics* ptGraphics, uint32_t uAreaCount, plDrawArea* atAreas, 
             }
             
             vkCmdBindIndexBuffer(ptCurrentFrame->tCmdBuf, ptGraphics->tResourceManager.sbtBuffers[ptDraw->ptMesh->uIndexBuffer].tBuffer, 0, VK_INDEX_TYPE_UINT32);
-            vkCmdBindVertexBuffers(ptCurrentFrame->tCmdBuf, 0, 1, &ptGraphics->tResourceManager.sbtBuffers[ptDraw->ptMesh->uVertexBuffers[0]].tBuffer, &tOffsets);
+            vkCmdBindVertexBuffers(ptCurrentFrame->tCmdBuf, 0, 1, &ptGraphics->tResourceManager.sbtBuffers[ptDraw->ptMesh->uVertexBuffer].tBuffer, &tOffsets);
             vkCmdDrawIndexed(ptCurrentFrame->tCmdBuf, ptDraw->ptMesh->uIndexCount, 1, 0, ptDraw->ptMesh->uVertexOffset, 0);
         }
 
@@ -1248,12 +1280,12 @@ pl_create_constant_buffer(plResourceManager* ptResourceManager, size_t szItemSiz
         .szRequestedSize = szItemSize * szItemCount
     };
 
-    const size_t szRequiredSize = pl__get_const_buffer_req_size(ptResourceManager->_ptDevice, szItemSize * szItemCount);
+    const size_t szRequiredSize = pl__get_const_buffer_req_size(ptResourceManager->_ptDevice, szItemSize);
 
     // create vulkan buffer
     const VkBufferCreateInfo tBufferCreateInfo = {
         .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size        = szRequiredSize,
+        .size        = szRequiredSize * szItemCount,
         .usage       = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE
     };
@@ -1263,7 +1295,7 @@ pl_create_constant_buffer(plResourceManager* ptResourceManager, size_t szItemSiz
     VkMemoryRequirements tMemoryRequirements = {0};
     vkGetBufferMemoryRequirements(tDevice, tBuffer.tBuffer, &tMemoryRequirements);
     tBuffer.szSize = tMemoryRequirements.size;
-    tBuffer.szStride = szItemSize;
+    tBuffer.szStride = szRequiredSize;
 
     // allocate buffer
     const VkMemoryAllocateInfo tAllocInfo = {

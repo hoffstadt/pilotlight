@@ -166,10 +166,15 @@ enum plMeshFormatFlags_
     PL_MESH_FORMAT_FLAG_NONE           = 0,
     PL_MESH_FORMAT_FLAG_HAS_POSITION   = 1 << 0,
     PL_MESH_FORMAT_FLAG_HAS_NORMAL     = 1 << 1,
-    PL_MESH_FORMAT_FLAG_HAS_TEXCOORD   = 1 << 2,
-    PL_MESH_FORMAT_FLAG_HAS_COLOR      = 1 << 3,
-    PL_MESH_FORMAT_FLAG_HAS_TEXCOORD_2 = 1 << 4,
-    PL_MESH_FORMAT_FLAG_HAS_TANGENT    = 1 << 5,
+    PL_MESH_FORMAT_FLAG_HAS_TANGENT    = 1 << 2,
+    PL_MESH_FORMAT_FLAG_HAS_TEXCOORD_0 = 1 << 3,
+    PL_MESH_FORMAT_FLAG_HAS_TEXCOORD_1 = 1 << 4,
+    PL_MESH_FORMAT_FLAG_HAS_COLOR_0    = 1 << 5,
+    PL_MESH_FORMAT_FLAG_HAS_COLOR_1    = 1 << 6,
+    PL_MESH_FORMAT_FLAG_HAS_JOINTS_0   = 1 << 7,
+    PL_MESH_FORMAT_FLAG_HAS_JOINTS_1   = 1 << 8,
+    PL_MESH_FORMAT_FLAG_HAS_WEIGHTS_0  = 1 << 9,
+    PL_MESH_FORMAT_FLAG_HAS_WEIGHTS_1  = 1 << 10
 };
 
 //-----------------------------------------------------------------------------
@@ -178,7 +183,7 @@ enum plMeshFormatFlags_
 
 typedef struct _plMesh
 {
-    uint32_t uVertexBuffers[2];
+    uint32_t uVertexBuffer;
     uint32_t uIndexBuffer;
     uint32_t uVertexOffset;
     uint32_t uVertexCount;
@@ -191,6 +196,7 @@ typedef struct _plDrawArea
     VkViewport   tViewport;
     VkRect2D     tScissor;
     plBindGroup* ptBindGroup0;
+    uint32_t     uDynamicBufferOffset0;
     uint32_t     uDrawOffset;
     uint32_t     uDrawCount;
 } plDrawArea;
@@ -201,8 +207,8 @@ typedef struct _plDraw
     plBindGroup* ptBindGroup1;
     plBindGroup* ptBindGroup2;
     plShader*    ptShader;
-    uint32_t     uDynamicBufferOffset0;
     uint32_t     uDynamicBufferOffset1;
+    uint32_t     uDynamicBufferOffset2;
 } plDraw;
 
 typedef struct _plTextureDesc

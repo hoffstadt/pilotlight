@@ -22,6 +22,7 @@ Index of this file:
 //-----------------------------------------------------------------------------
 
 #include <stdbool.h>
+#include "pl_math.inc"
 
 //-----------------------------------------------------------------------------
 // [SECTION] forward declarations & basic types
@@ -35,13 +36,24 @@ typedef struct _plGltf
 {
     plMesh*      sbtMeshes;
     plBindGroup* sbtBindGroups;
-    bool*        sbtHasTangent;
+    plMat4*      sbtTransforms;
+    uint32_t*    sbuVertexOffsets;
+    uint32_t     uObjectConstantBuffer;
+    uint32_t     uStorageBuffer;  
 } plGltf;
+
+typedef struct _plObjectInfo
+{
+    plMat4   tModel;
+    uint32_t uVertexOffset;
+    int      _unused[3];
+} plObjectInfo;
 
 //-----------------------------------------------------------------------------
 // [SECTION] public api
 //-----------------------------------------------------------------------------
 
+static inline float frandom(float fMax){ return (float)rand()/(float)(RAND_MAX/fMax);}
 bool pl_ext_load_gltf(plGraphics* ptGraphics, const char* pcPath, plGltf* ptGltfOut);
 
 #endif // PL_GLTF_EXTENSION_H

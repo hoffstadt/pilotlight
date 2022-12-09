@@ -224,7 +224,6 @@ with pl.project("pilotlight"):
 
         def config_commons():
             pl.set_output_binary("pilot_light")
-            pl.add_vulkan_glsl_files("../shaders/glsl/", "simple.frag", "simple.vert")
                
         with pl.configuration("debug"):
             with pl.platform(pl.PlatformType.WIN32):
@@ -233,6 +232,7 @@ with pl.project("pilotlight"):
                     msvc_config_commons()
                     project_commons()
                     config_commons()
+                    pl.add_vulkan_glsl_files("../shaders/glsl/", "phong.frag", "phong.vert")
                     pl.add_definition("_DEBUG")
                     pl.add_definition("PL_VULKAN_BACKEND")
                     
@@ -241,6 +241,7 @@ with pl.project("pilotlight"):
                     project_commons()
                     gcc_project_commons()
                     config_commons()
+                    pl.add_vulkan_glsl_files("../shaders/glsl/", "phong.frag", "phong.vert")
                     pl.add_source_file("../out/pilotlight.c.o")
                     pl.add_source_file("pl_main_linux.c")
             with pl.platform(pl.PlatformType.MACOS):
@@ -248,6 +249,7 @@ with pl.project("pilotlight"):
                     project_commons()
                     config_commons()
                     clang_project_commons()
+                    pl.add_vulkan_glsl_files("../shaders/glsl/", "phong.frag", "phong.vert")
                     pl.add_definition("PL_VULKAN_BACKEND")
                     pl.add_source_file("../out/pilotlight.c.o")
                     pl.add_source_file("pl_main_macos.m")
