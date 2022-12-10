@@ -570,16 +570,18 @@ pl_create_shader(plGraphics* ptGraphics, const plShaderDesc* ptDesc, plShader* p
     };
 
 
-    const VkSpecializationMapEntry tSpecializationEntry0 = {
-        .constantID = 0,
-        .offset     = 0,
-        .size       = sizeof(int)
-    };
-
-    const VkSpecializationMapEntry tSpecializationEntry1 = {
-        .constantID = 1,
-        .offset     = sizeof(int),
-        .size       = sizeof(int)
+    const VkSpecializationMapEntry tSpecializationEntries[] = 
+    {
+        {
+            .constantID = 0,
+            .offset     = 0,
+            .size       = sizeof(int)
+        },
+        {
+            .constantID = 1,
+            .offset     = sizeof(int),
+            .size       = sizeof(int)
+        }
     };
 
     int aiData[2] = {
@@ -596,7 +598,7 @@ pl_create_shader(plGraphics* ptGraphics, const plShaderDesc* ptDesc, plShader* p
 
     VkSpecializationInfo tSpecializationInfo0 = {
         .mapEntryCount = 2,
-        .pMapEntries   = &tSpecializationEntry0,
+        .pMapEntries   = tSpecializationEntries,
         .dataSize      = sizeof(int) * 2,
         .pData         = aiData
     };
