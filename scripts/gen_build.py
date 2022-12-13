@@ -43,7 +43,7 @@ with pl.project("pilotlight"):
         pl.add_frameworks("Metal", "MetalKit", "Cocoa", "IOKit", "CoreVideo", "QuartzCore")
 
     def project_commons():
-        pl.add_include_directories("../out", "../dependencies/stb", "../src", "../extensions")
+        pl.add_include_directories("../out", "../dependencies/stb", "../dependencies/cgltf", "../src", "../extensions")
         pl.set_output_directory("../out")
         pl.add_link_directory("../out")
         pl.add_definitions("_USE_MATH_DEFINES", "PL_PROFILING_ON", "PL_ALLOW_HOT_RELOAD", "PL_ENABLE_VALIDATION_LAYERS")
