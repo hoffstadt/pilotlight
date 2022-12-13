@@ -70,6 +70,7 @@ typedef int plMeshFormatFlags;    // -> enum _plMeshFormatFlags     // Flags:
 typedef int plBlendMode;          // -> enum _plBlendMode           // Enum:
 typedef int plDepthMode;          // -> enum _plDepthMode           // Enum:
 
+
 //-----------------------------------------------------------------------------
 // [SECTION] public api
 //-----------------------------------------------------------------------------
@@ -166,6 +167,7 @@ enum _plBlendMode
     PL_BLEND_MODE_COUNT
 };
 
+
 enum _plDepthMode
 {
     PL_DEPTH_MODE_NEVER,
@@ -178,7 +180,7 @@ enum _plDepthMode
     PL_DEPTH_MODE_ALWAYS,
 };
 
-enum _plMeshFormatFlags
+enum plMeshFormatFlags_
 {
     PL_MESH_FORMAT_FLAG_NONE           = 0,
     PL_MESH_FORMAT_FLAG_HAS_POSITION   = 1 << 0,
