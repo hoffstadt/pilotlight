@@ -1108,8 +1108,6 @@ pl_process_cleanup_queue(plResourceManager* ptResourceManager, uint32_t uFramesT
 
             // add to free indices
             pl_sb_push(ptResourceManager->_sbulShaderFreeIndices, uShaderIndex);
-            ptResourceManager->_sbulShaderHashes[uShaderIndex] = 0;
-
             bNeedUpdate = true;
         }
         else
