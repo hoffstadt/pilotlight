@@ -1097,12 +1097,12 @@ pl_process_cleanup_queue(plResourceManager* ptResourceManager, uint32_t uFramesT
 
             vkDestroyPipelineLayout(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, ptShader->_tPipelineLayout, NULL);
             vkDestroyPipeline(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, ptShader->_tPipeline, NULL);
-            for(uint32_t i = 0; i < ptShader->tDesc.uBindGroupLayoutCount; i++)
+            for(uint32_t j = 0; j < ptShader->tDesc.uBindGroupLayoutCount; j++)
             {
-                if(ptShader->tDesc.atBindGroupLayouts[i]._tDescriptorSetLayout)
+                if(ptShader->tDesc.atBindGroupLayouts[j]._tDescriptorSetLayout)
                 {
-                    vkDestroyDescriptorSetLayout(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, ptShader->tDesc.atBindGroupLayouts[i]._tDescriptorSetLayout, NULL);
-                    ptShader->tDesc.atBindGroupLayouts[i]._tDescriptorSetLayout = VK_NULL_HANDLE;
+                    vkDestroyDescriptorSetLayout(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, ptShader->tDesc.atBindGroupLayouts[j]._tDescriptorSetLayout, NULL);
+                    ptShader->tDesc.atBindGroupLayouts[j]._tDescriptorSetLayout = VK_NULL_HANDLE;
                 }
             }
 
