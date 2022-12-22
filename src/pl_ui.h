@@ -1,13 +1,15 @@
 /*
-   pl_ui, v0.1 (WIP)
+   pl_ui.h, v0.1
 */
 
 /*
 Index of this file:
 // [SECTION] header mess
+// [SECTION] defines
 // [SECTION] includes
+// [SECTION] forward declarations
 // [SECTION] public api
-// [SECTION] c file
+// [SECTION] structs
 */
 
 //-----------------------------------------------------------------------------
@@ -33,8 +35,6 @@ Index of this file:
 #include <stdint.h>  // uint*_t
 #include "pl_math.inc"
 
-#include "pl_draw.h" // temporary
-
 //-----------------------------------------------------------------------------
 // [SECTION] forward declarations
 //-----------------------------------------------------------------------------
@@ -49,10 +49,21 @@ PL_DECLARE_STRUCT(plUiNextWindowData);
 // enums
 typedef int plUiNextWindowFlags;
 
+// external (from pl_draw.h)
+PL_DECLARE_STRUCT(plFont);
+PL_DECLARE_STRUCT(plDrawList);
+PL_DECLARE_STRUCT(plDrawLayer);
+PL_DECLARE_STRUCT(plDrawContext);
+
 //-----------------------------------------------------------------------------
 // [SECTION] public api
 //-----------------------------------------------------------------------------
 
+// context
+void pl_ui_setup_context  (plDrawContext* ptDrawCtx, plUiContext* ptCtx);
+void pl_ui_cleanup_context(plUiContext* ptCtx);
+
+// main
 void pl_ui_new_frame(plUiContext* ptCtx);
 void pl_ui_end_frame(void);
 void pl_ui_render(void);
@@ -83,21 +94,10 @@ void pl_ui_align_text(void);
 
 // state query
 bool pl_ui_was_last_item_hovered(void);
+bool pl_ui_was_last_item_active (void);
 
 // styling
 void pl_ui_set_dark_theme(plUiContext* ptCtx);
-
-//-----------------------------------------------------------------------------
-// [SECTION] enums
-//-----------------------------------------------------------------------------
-
-enum _plUiNextWindowFlags
-{
-    PL_NEXT_WINDOW_DATA_FLAGS_NONE          = 0,
-    PL_NEXT_WINDOW_DATA_FLAGS_HAS_POS       = 1 << 0,
-    PL_NEXT_WINDOW_DATA_FLAGS_HAS_SIZE      = 1 << 1,
-    PL_NEXT_WINDOW_DATA_FLAGS_HAS_COLLAPSED = 1 << 2,   
-};
 
 //-----------------------------------------------------------------------------
 // [SECTION] structs
@@ -145,32 +145,33 @@ typedef struct _plUiNextWindowData
 typedef struct _plUiPrevItemData
 {
     bool bHovered;
+    bool bActive;
 } plUiPrevItemData;
 
 typedef struct _plUiWindow
 {
-    uint32_t    uId;
-    const char* pcName;
-    plVec2      tPos;
-    plVec2      tContentPos;
-    plVec2      tContentMaxSize;
-    plVec2      tSize;
-    plVec2      tFullSize;
-    plVec2      tCursorPos;
-    plVec2      tCursorPrevLine;
-    float       fTextVerticalOffset;
-    uint32_t    uTreeDepth;
+    uint32_t     uId;
+    const char*  pcName;
+    plVec2       tPos;
+    plVec2       tContentPos;
+    plVec2       tContentMaxSize;
+    plVec2       tSize;
+    plVec2       tFullSize;
+    plVec2       tCursorPos;
+    plVec2       tCursorPrevLine;
+    float        fTextVerticalOffset;
+    uint32_t     uTreeDepth;
 
     // state
-    bool        bHovered;
-    bool        bActive;
-    bool        bDragging;
-    bool        bResizing;
-    bool        bAutoSize;
-    bool        bCollapsed;
+    bool         bHovered;
+    bool         bActive;
+    bool         bDragging;
+    bool         bResizing;
+    bool         bAutoSize;
+    bool         bCollapsed;
 
-    uint64_t    ulFrameActivated;
-    uint64_t    ulFrameHovered;
+    uint64_t     ulFrameActivated;
+    uint64_t     ulFrameHovered;
     
     plDrawLayer* ptBgLayer;
     plDrawLayer* ptFgLayer;
@@ -184,6 +185,7 @@ typedef struct _plUiContext
     // prev/next state
     plUiNextWindowData tNextWindowData;
     plUiPrevItemData   tPrevItemData;
+    uint32_t*          sbuIdStack;
 
     // state
     uint32_t uToggledId;
@@ -207,8 +209,8 @@ typedef struct _plUiContext
     plUiWindow*  ptActiveWindow;
     plUiWindow*  ptFocusedWindow;
 
-    plDrawList tDrawlist;
-    plFont*    ptFont;
+    plDrawList* ptDrawlist;
+    plFont*     ptFont;
 } plUiContext;
 
 #endif // PL_UI_H

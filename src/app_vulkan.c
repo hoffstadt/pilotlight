@@ -137,9 +137,8 @@ pl_app_setup(plAppData* ptAppData)
     pl_build_font_atlas(&ptAppData->tCtx, &ptAppData->fontAtlas);
 
     // ui
-    pl_register_drawlist(&ptAppData->tCtx, &ptAppData->tUiContext.tDrawlist);
-    pl_setup_drawlist_vulkan(&ptAppData->tUiContext.tDrawlist, ptAppData->tGraphics.tRenderPass, ptAppData->tGraphics.tSwapchain.tMsaaSamples);
-    pl_ui_set_dark_theme(&ptAppData->tUiContext);
+    pl_ui_setup_context(&ptAppData->tCtx, &ptAppData->tUiContext);
+    pl_setup_drawlist_vulkan(ptAppData->tUiContext.ptDrawlist, ptAppData->tGraphics.tRenderPass, ptAppData->tGraphics.tSwapchain.tMsaaSamples);
     ptAppData->tUiContext.ptFont = &ptAppData->fontAtlas.sbFonts[0];
 
     // camera
@@ -157,6 +156,7 @@ pl_app_shutdown(plAppData* ptAppData)
     vkDeviceWaitIdle(ptAppData->tGraphics.tDevice.tLogicalDevice);
     pl_cleanup_font_atlas(&ptAppData->fontAtlas);
     pl_cleanup_draw_context(&ptAppData->tCtx);
+    pl_ui_cleanup_context(&ptAppData->tUiContext);
     pl_cleanup_graphics(&ptAppData->tGraphics);
     pl_cleanup_profile_context();
     pl_cleanup_extension_registry();
@@ -265,19 +265,22 @@ pl_app_update(plAppData* ptAppData)
         if(pl_ui_begin_window("UI Demo", NULL, false))
         {
             pl_ui_progress_bar(0.75f, (plVec2){-1.0f, 0.0f}, NULL);
+            if(pl_ui_button("Press me"))
+                bOpen = true;
             static bool bOpen0 = false;
             if(pl_ui_tree_node("Root Node", &bOpen0))
             {
                 static bool bOpen1 = false;
                 if(pl_ui_tree_node("Child 1", &bOpen1))
                 {
-                    pl_ui_button("Press me");
+                    if(pl_ui_button("Press me"))
+                        bOpen = true;
                     pl_ui_tree_pop();
                 }
                 static bool bOpen2 = false;
                 if(pl_ui_tree_node("Child 2", &bOpen2))
                 {
-                    pl_ui_button("Press me 2");
+                    pl_ui_button("Press me");
                     pl_ui_tree_pop();
                 }
                 pl_ui_tree_pop();
@@ -302,7 +305,7 @@ pl_app_update(plAppData* ptAppData)
 
         // submit draw lists
         pl_submit_drawlist_vulkan(&ptAppData->drawlist, (float)ptIOCtx->afMainViewportSize[0], (float)ptIOCtx->afMainViewportSize[1], ptCurrentFrame->tCmdBuf, (uint32_t)ptAppData->tGraphics.szCurrentFrameIndex);
-        pl_submit_drawlist_vulkan(&ptAppData->tUiContext.tDrawlist, (float)ptIOCtx->afMainViewportSize[0], (float)ptIOCtx->afMainViewportSize[1], ptCurrentFrame->tCmdBuf, (uint32_t)ptAppData->tGraphics.szCurrentFrameIndex);
+        pl_submit_drawlist_vulkan(ptAppData->tUiContext.ptDrawlist, (float)ptIOCtx->afMainViewportSize[0], (float)ptIOCtx->afMainViewportSize[1], ptCurrentFrame->tCmdBuf, (uint32_t)ptAppData->tGraphics.szCurrentFrameIndex);
 
         //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~end frame~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         pl_end_main_pass(&ptAppData->tGraphics);

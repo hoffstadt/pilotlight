@@ -5,6 +5,8 @@
 /*
 Index of this file:
 // [SECTION] includes
+// [SECTION] context
+// [SECTION] internal enums
 // [SECTION] internal functions
 // [SECTION] implementations
 // [SECTION] internal implementations
@@ -21,26 +23,76 @@ Index of this file:
 #include "pl_math.h"
 #include "pl_string.h"
 #include "pl_memory.h"
+#include "pl_draw.h"
+
+//-----------------------------------------------------------------------------
+// [SECTION] context
+//-----------------------------------------------------------------------------
+
+static plUiContext* gptCtx = NULL;
+
+//-----------------------------------------------------------------------------
+// [SECTION] internal enums
+//-----------------------------------------------------------------------------
+
+enum _plUiNextWindowFlags
+{
+    PL_NEXT_WINDOW_DATA_FLAGS_NONE          = 0,
+    PL_NEXT_WINDOW_DATA_FLAGS_HAS_POS       = 1 << 0,
+    PL_NEXT_WINDOW_DATA_FLAGS_HAS_SIZE      = 1 << 1,
+    PL_NEXT_WINDOW_DATA_FLAGS_HAS_COLLAPSED = 1 << 2,   
+};
 
 //-----------------------------------------------------------------------------
 // [SECTION] internal functions
 //-----------------------------------------------------------------------------
 
-static bool  pl__ui_is_mouse_hovering_rect(plVec2 minVec, plVec2 maxVec);
-static bool  pl__ui_does_triangle_contain_point(plVec2 p0, plVec2 p1, plVec2 p2, plVec2 point);
-static bool  pl__ui_does_circle_contain_point(plVec2 cen, float radius, plVec2 point);
-static float pl__ui_get_frame_height(void);
-static void  pl__ui_advance_cursor(float x, float y);
-static void  pl__ui_next_line(void);
-static void  pl__ui_item_add_size(float fWidth, float fHeight);
-static float pl__ui_get_window_content_width(void);
-static float pl__ui_get_window_content_width_available(void);
+static bool         pl__ui_does_triangle_contain_point       (plVec2 p0, plVec2 p1, plVec2 p2, plVec2 point);
+static void         pl__ui_next_line                         (void);
+static void         pl__ui_item_add_size                     (float fWidth, float fHeight);
+static bool         pl__ui_is_item_hoverable                 (const plRect* ptBox, uint32_t uHash);
+static bool         pl__ui_button_behavior                   (const plRect* ptBox, uint32_t uHash, bool* pbOutHovered, bool* pbOutHeld);
+static inline bool  pl__ui_is_mouse_hovering_rect            (plVec2 minVec, plVec2 maxVec)           { const plVec2 tMousePos = pl_get_mouse_pos(); return ( tMousePos.x >= minVec.x && tMousePos.y >= minVec.y && tMousePos.x <= maxVec.x && tMousePos.y <= maxVec.y);}
+static inline bool  pl__ui_does_circle_contain_point         (plVec2 cen, float radius, plVec2 point) { const float fDistanceSquared = powf(point.x - cen.x, 2) + powf(point.y - cen.y, 2); return fDistanceSquared <= radius * radius; }
+static inline float pl__ui_get_frame_height                  (void)                                   { return gptCtx->tStyle.fFontSize + gptCtx->tStyle.tFramePadding.y * 2.0f; }
+static inline void  pl__ui_advance_cursor                    (float x, float y)                       { gptCtx->ptCurrentWindow->tCursorPos.x += x; gptCtx->ptCurrentWindow->tCursorPos.y += y; }
+static inline float pl__ui_get_window_content_width          (void)                                   { return gptCtx->ptCurrentWindow->tSize.x - gptCtx->tStyle.fWindowHorizontalPadding * 2.0f;}
+static inline float pl__ui_get_window_content_width_available(void)                                   { return pl__ui_get_window_content_width() - (gptCtx->ptCurrentWindow->tCursorPos.x - gptCtx->ptCurrentWindow->tContentPos.x);}
 
 //-----------------------------------------------------------------------------
 // [SECTION] implementations
 //-----------------------------------------------------------------------------
 
-static plUiContext* gptCtx = NULL;
+void
+pl_ui_setup_context(plDrawContext* ptDrawCtx, plUiContext* ptCtx)
+{
+    ptCtx->ptDrawlist = pl_alloc(sizeof(plDrawList));
+    memset(ptCtx->ptDrawlist, 0, sizeof(plDrawList));
+    pl_register_drawlist(ptDrawCtx, ptCtx->ptDrawlist);
+    pl_ui_set_dark_theme(ptCtx);
+}
+
+void
+pl_ui_cleanup_context(plUiContext* ptCtx)
+{
+    for(uint32_t i = 0; i < pl_sb_size(ptCtx->sbtWindows); i++)
+    {
+        pl_return_draw_layer(ptCtx->sbtWindows[i].ptBgLayer);
+        pl_return_draw_layer(ptCtx->sbtWindows[i].ptFgLayer);
+    }
+    pl_free(ptCtx->ptDrawlist);
+    pl_sb_free(ptCtx->sbtWindows);
+    pl_sb_free(ptCtx->sbtFocusedWindows);
+    pl_sb_free(ptCtx->sbtSortingWindows);
+    pl_sb_free(ptCtx->sbuIdStack);
+    ptCtx->ptDrawlist = NULL;
+    ptCtx->ptCurrentWindow = NULL;
+    ptCtx->ptHoveredWindow = NULL;
+    ptCtx->ptMovingWindow = NULL;
+    ptCtx->ptActiveWindow = NULL;
+    ptCtx->ptFocusedWindow = NULL;
+    ptCtx->ptFont = NULL;
+}
 
 void
 pl_ui_new_frame(plUiContext* ptCtx)
@@ -49,31 +101,12 @@ pl_ui_new_frame(plUiContext* ptCtx)
 
     const plVec2 tMousePos = pl_get_mouse_pos();
 
-    // update state id's from previous frames
-    gptCtx->uHoveredId = gptCtx->uNextHoveredId;
-    gptCtx->uActiveId = gptCtx->uNextActiveId;
-    gptCtx->uToggledId = gptCtx->uNextToggleId;
-    gptCtx->uActiveWindowId = gptCtx->uNextActiveWindowId;
-    gptCtx->uHoveredWindowId = gptCtx->uNextHoveredWindowId;
-
-    // null state
-    gptCtx->ptHoveredWindow = NULL;
-    gptCtx->ptFocusedWindow = NULL;
-    gptCtx->ptActiveWindow = NULL;
-    gptCtx->uNextToggleId = 0u;
-    gptCtx->uNextHoveredId = 0u;
-    gptCtx->uNextActiveId = 0u;
-    gptCtx->uNextActiveWindowId = 0u;
-    gptCtx->uNextHoveredWindowId = 0u;
-    gptCtx->tPrevItemData.bHovered = false;
-    gptCtx->tNextWindowData.tFlags = PL_NEXT_WINDOW_DATA_FLAGS_NONE;
-
     // use last frame window ordering as a starting point for sorting
     if(pl_sb_size(gptCtx->sbtFocusedWindows) > 0)
     {
         pl_sb_reset(gptCtx->sbtSortingWindows);
         pl_sb_resize(gptCtx->sbtSortingWindows, pl_sb_size(gptCtx->sbtFocusedWindows));
-        memcpy(gptCtx->sbtSortingWindows, gptCtx->sbtFocusedWindows, pl_sb_size(gptCtx->sbtFocusedWindows) * sizeof(plUiWindow*));
+        memcpy(gptCtx->sbtSortingWindows, gptCtx->sbtFocusedWindows, pl_sb_size(gptCtx->sbtFocusedWindows) * sizeof(plUiWindow*)); //-V1004
         pl_sb_reset(gptCtx->sbtFocusedWindows);
     }
     else
@@ -101,7 +134,7 @@ pl_ui_new_frame(plUiContext* ptCtx)
     }
 
     // add windows in focus order
-    pl_sb_del_swap(gptCtx->sbtSortingWindows, uLastActiveWindowID);
+    pl_sb_del_swap(gptCtx->sbtSortingWindows, uLastActiveWindowID); //-V1004
     for(uint32_t i = 0; i < pl_sb_size(gptCtx->sbtSortingWindows); i++)
     {
         gptCtx->sbtSortingWindows[i]->bHovered = false;
@@ -135,18 +168,18 @@ pl_ui_new_frame(plUiContext* ptCtx)
     }
 
     // check moving or resizing status
-    if(gptCtx->ptMovingWindow && pl_is_mouse_dragging(PL_MOUSE_BUTTON_LEFT, -1.0f))
+    if(gptCtx->ptMovingWindow && pl_is_mouse_dragging(PL_MOUSE_BUTTON_LEFT, 2.0f))
     {
         if(gptCtx->ptMovingWindow->bDragging)
         {
-            gptCtx->ptMovingWindow->tPos.x = gptCtx->ptMovingWindow->tPos.x + pl_get_mouse_drag_delta(PL_MOUSE_BUTTON_LEFT, -1.0f).x;
-            gptCtx->ptMovingWindow->tPos.y = gptCtx->ptMovingWindow->tPos.y + pl_get_mouse_drag_delta(PL_MOUSE_BUTTON_LEFT, -1.0f).y;       
+            gptCtx->ptMovingWindow->tPos.x = gptCtx->ptMovingWindow->tPos.x + pl_get_mouse_drag_delta(PL_MOUSE_BUTTON_LEFT, 2.0f).x;
+            gptCtx->ptMovingWindow->tPos.y = gptCtx->ptMovingWindow->tPos.y + pl_get_mouse_drag_delta(PL_MOUSE_BUTTON_LEFT, 2.0f).y;       
         }
 
         if(gptCtx->ptMovingWindow->bResizing)
         {
-            gptCtx->ptMovingWindow->tFullSize.x += pl_get_mouse_drag_delta(PL_MOUSE_BUTTON_LEFT, -1.0f).x;
-            gptCtx->ptMovingWindow->tFullSize.y += pl_get_mouse_drag_delta(PL_MOUSE_BUTTON_LEFT, -1.0f).y;
+            gptCtx->ptMovingWindow->tFullSize.x += pl_get_mouse_drag_delta(PL_MOUSE_BUTTON_LEFT, 2.0f).x;
+            gptCtx->ptMovingWindow->tFullSize.y += pl_get_mouse_drag_delta(PL_MOUSE_BUTTON_LEFT, 2.0f).y;
             
         }
         pl_reset_mouse_drag_delta(PL_MOUSE_BUTTON_LEFT);
@@ -156,7 +189,24 @@ pl_ui_new_frame(plUiContext* ptCtx)
 void
 pl_ui_end_frame(void)
 {
+    // update state id's from previous frames
+    gptCtx->uHoveredId = gptCtx->uNextHoveredId;
+    gptCtx->uActiveId = gptCtx->uNextActiveId;
+    gptCtx->uToggledId = gptCtx->uNextToggleId;
+    gptCtx->uActiveWindowId = gptCtx->uNextActiveWindowId;
+    gptCtx->uHoveredWindowId = gptCtx->uNextHoveredWindowId;
 
+    // null state
+    gptCtx->ptHoveredWindow = NULL;
+    gptCtx->ptFocusedWindow = NULL;
+    gptCtx->ptActiveWindow = NULL;
+    gptCtx->uNextToggleId = 0u;
+    gptCtx->uNextHoveredId = 0u;
+    gptCtx->uNextActiveId = 0u;
+    gptCtx->uNextActiveWindowId = 0u;
+    gptCtx->uNextHoveredWindowId = 0u;
+    gptCtx->tPrevItemData.bHovered = false;
+    gptCtx->tNextWindowData.tFlags = PL_NEXT_WINDOW_DATA_FLAGS_NONE;
 }
 
 void
@@ -173,6 +223,7 @@ bool
 pl_ui_begin_window(const char* pcName, bool* pbOpen, bool bAutoSize)
 {
     const uint32_t uWindowID = pl_str_hash(pcName, 0, 0);
+    pl_sb_push(gptCtx->sbuIdStack, uWindowID);
 
     // see if window already exist
     gptCtx->ptCurrentWindow = NULL;
@@ -195,8 +246,8 @@ pl_ui_begin_window(const char* pcName, bool* pbOpen, bool bAutoSize)
             .tPos      = {.x = 200.0f, .y = 200.0f},
             .tSize     = {.x = 500.0f, .y = 700.0f},
             .tFullSize = {.x = 500.0f, .y = 700.0f},
-            .ptBgLayer = pl_request_draw_layer(&gptCtx->tDrawlist, pcName),
-            .ptFgLayer = pl_request_draw_layer(&gptCtx->tDrawlist, pcName)
+            .ptBgLayer = pl_request_draw_layer(gptCtx->ptDrawlist, pcName),
+            .ptFgLayer = pl_request_draw_layer(gptCtx->ptDrawlist, pcName)
         };
 
         pl_sb_push(gptCtx->sbtWindows, tWindow);
@@ -321,7 +372,6 @@ pl_ui_begin_window(const char* pcName, bool* pbOpen, bool bAutoSize)
         gptCtx->ptCurrentWindow->ulFrameActivated = pl_get_io_context()->ulFrameCount;
     }
 
-
     return !gptCtx->ptCurrentWindow->bCollapsed;
 }
 
@@ -345,6 +395,7 @@ pl_ui_end_window(void)
         }
     }
     gptCtx->ptCurrentWindow = NULL;
+    pl_sb_pop(gptCtx->sbuIdStack);
 }
 
 void
@@ -367,44 +418,31 @@ pl_ui_button(const char* pcText)
     plUiWindow* ptWindow = gptCtx->ptCurrentWindow;
     const float fFrameHeight = pl__ui_get_frame_height();
 
-    const uint32_t uHash = pl_str_hash(pcText, 0, 0);
+    const uint32_t uHash = pl_str_hash(pcText, 0, pl_sb_top(gptCtx->sbuIdStack));
 
     const plVec2 tTextSize = pl_calculate_text_size(gptCtx->ptFont, gptCtx->tStyle.fFontSize, pcText, -1.0f);
  
     const plVec2 tStartPos = ptWindow->tCursorPos;
     const plVec2 tFinalSize = {floorf(tTextSize.x + 2.0f * gptCtx->tStyle.tFramePadding.x), floorf(fFrameHeight)};
-    const plVec2 tEndPos = pl_add_vec2(tStartPos, tFinalSize);
 
-    plVec2 tTextStartPos = {
-        .x = tStartPos.x + gptCtx->tStyle.tFramePadding.x,
-        .y = tStartPos.y + fFrameHeight / 2.0f - tTextSize.y / 2.0f
+    const plVec2 tTextStartPos = {
+        .x = roundf(tStartPos.x + gptCtx->tStyle.tFramePadding.x),
+        .y = roundf(tStartPos.y + fFrameHeight / 2.0f - tTextSize.y / 2.0f)
     };
 
-    tTextStartPos.x = roundf(tTextStartPos.x);
-    tTextStartPos.y = roundf(tTextStartPos.y);
+    const plRect tBoundingBox = pl_calculate_rect(tStartPos, tFinalSize);
+    bool bHovered = false;
+    bool bHeld = false;
+    const bool bPressed = pl__ui_button_behavior(&tBoundingBox, uHash, &bHovered, &bHeld);
 
-    if(pl__ui_is_mouse_hovering_rect(tStartPos, tEndPos) && ptWindow == gptCtx->ptHoveredWindow) gptCtx->uNextHoveredId = uHash;
-    const bool bHovered = gptCtx->uHoveredId == uHash;
-    bool bTriggered = false;
-
-    if(bHovered && pl_is_mouse_down(PL_MOUSE_BUTTON_LEFT))
-        gptCtx->uNextActiveId = uHash;
-
-    if(bHovered && pl_is_mouse_released(PL_MOUSE_BUTTON_LEFT))
-    {
-        gptCtx->uNextActiveId = 0;
-        bTriggered = uHash == gptCtx->uActiveId;
-    }
-
-    if(gptCtx->uActiveId == uHash) pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tEndPos, gptCtx->tStyle.tButtonActiveCol);
-    else if(bHovered)              pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tEndPos, gptCtx->tStyle.tButtonHoveredCol);
-    else                           pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tEndPos, gptCtx->tStyle.tButtonCol);
+    if(bHeld)         pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tBoundingBox.tMax, gptCtx->tStyle.tButtonActiveCol);
+    else if(bHovered) pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tBoundingBox.tMax, gptCtx->tStyle.tButtonHoveredCol);
+    else              pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tBoundingBox.tMax, gptCtx->tStyle.tButtonCol);
 
     pl_add_text(ptWindow->ptFgLayer, gptCtx->ptFont, gptCtx->tStyle.fFontSize, tTextStartPos, gptCtx->tStyle.tTextCol, pcText, 0.0f);
     pl__ui_item_add_size(tFinalSize.x, fFrameHeight);
     pl__ui_next_line();
-    gptCtx->tPrevItemData.bHovered = bHovered;
-    return bTriggered;
+    return bPressed;
 }
 
 bool
@@ -412,13 +450,12 @@ pl_ui_checkbox(const char* pcText, bool* bValue)
 {
     plUiWindow* ptWindow = gptCtx->ptCurrentWindow;
     const bool bOriginalValue = *bValue;
-    const uint32_t uHash = pl_str_hash(pcText, 0, 0);
+    const uint32_t uHash = pl_str_hash(pcText, 0, pl_sb_top(gptCtx->sbuIdStack));
     const plVec2 tTextSize = pl_calculate_text_size(gptCtx->ptFont, gptCtx->tStyle.fFontSize, pcText, -1.0f);
  
     const float fFrameHeight = pl__ui_get_frame_height();
     const plVec2 tStartPos = ptWindow->tCursorPos;
     const plVec2 tSize = {floorf(tTextSize.x + 2.0f * gptCtx->tStyle.tFramePadding.x + gptCtx->tStyle.tInnerSpacing.x + fFrameHeight), floorf(fFrameHeight)};
-    const plVec2 tEndPos = pl_add_vec2(tStartPos, tSize);
     const plVec2 tEndBoxPos = pl_add_vec2(tStartPos, (plVec2){fFrameHeight, fFrameHeight});
 
     const plVec2 tTextStartPos = {
@@ -426,23 +463,17 @@ pl_ui_checkbox(const char* pcText, bool* bValue)
         .y = roundf(tStartPos.y + fFrameHeight / 2.0f - tTextSize.y / 2.0f)
     };
 
-    if(pl__ui_is_mouse_hovering_rect(tStartPos, tEndPos) && ptWindow == gptCtx->ptFocusedWindow) gptCtx->uNextHoveredId = uHash;
-    const bool bHovered = gptCtx->uHoveredId == uHash;
-    bool bTriggered = false;
+    const plRect tBoundingBox = pl_calculate_rect(tStartPos, tSize);
+    bool bHovered = false;
+    bool bHeld = false;
+    const bool bPressed = pl__ui_button_behavior(&tBoundingBox, uHash, &bHovered, &bHeld);
 
-    if(bHovered && pl_is_mouse_down(PL_MOUSE_BUTTON_LEFT))
-        gptCtx->uNextActiveId = uHash;
-
-    if(bHovered && pl_is_mouse_released(PL_MOUSE_BUTTON_LEFT))
-    {
-        gptCtx->uNextActiveId = 0;
-        bTriggered = uHash == gptCtx->uActiveId;
+    if(bPressed)
         *bValue = !bOriginalValue;
-    }
 
-    if(gptCtx->uActiveId == uHash) pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tEndBoxPos, gptCtx->tStyle.tFrameBgActiveCol);
-    else if(bHovered)              pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tEndBoxPos, gptCtx->tStyle.tFrameBgHoveredCol);
-    else                           pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tEndBoxPos, gptCtx->tStyle.tFrameBgCol);
+    if(bHeld)         pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tEndBoxPos, gptCtx->tStyle.tFrameBgActiveCol);
+    else if(bHovered) pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tEndBoxPos, gptCtx->tStyle.tFrameBgHoveredCol);
+    else              pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tEndBoxPos, gptCtx->tStyle.tFrameBgCol);
 
     if(*bValue)
         pl_add_line(ptWindow->ptFgLayer, tStartPos, tEndBoxPos, gptCtx->tStyle.tCheckmarkCol, 2.0f);
@@ -450,15 +481,15 @@ pl_ui_checkbox(const char* pcText, bool* bValue)
     pl_add_text(ptWindow->ptFgLayer, gptCtx->ptFont, gptCtx->tStyle.fFontSize, tTextStartPos, gptCtx->tStyle.tTextCol, pcText, -1.0f);
     pl__ui_item_add_size(tTextSize.x + gptCtx->tStyle.tInnerSpacing.x + gptCtx->tStyle.tFramePadding.x + fFrameHeight, fFrameHeight);
     pl__ui_next_line();
-    gptCtx->tPrevItemData.bHovered = bHovered;
-    return bTriggered;
+    return bPressed;
 }
 
 bool
 pl_ui_collapsing_header(const char* pcText, bool* pbOpenState)
 {
     plUiWindow* ptWindow = gptCtx->ptCurrentWindow;
-    const uint32_t uHash = pl_str_hash(pcText, 0, 0);
+    const uint32_t uHash = pl_str_hash(pcText, 0, pl_sb_top(gptCtx->sbuIdStack));
+    pl_sb_push(gptCtx->sbuIdStack, uHash);
     const float fFrameHeight = pl__ui_get_frame_height();
 
     const plVec2 tSize = {pl__ui_get_window_content_width_available(), fFrameHeight};
@@ -472,23 +503,17 @@ pl_ui_collapsing_header(const char* pcText, bool* pbOpenState)
         .y = roundf(tStartPos.y + fFrameHeight / 2.0f - tTextSize.y / 2.0f)
     };
 
-    if(pl__ui_is_mouse_hovering_rect(tStartPos, tEndPos) && ptWindow == gptCtx->ptHoveredWindow) gptCtx->uNextHoveredId = uHash;
-    const bool bHovered = gptCtx->uHoveredId == uHash;
-    bool bTriggered = false;
+    const plRect tBoundingBox = pl_calculate_rect(tStartPos, tSize);
+    bool bHovered = false;
+    bool bHeld = false;
+    const bool bPressed = pl__ui_button_behavior(&tBoundingBox, uHash, &bHovered, &bHeld);
 
-    if(bTriggered && pl_is_mouse_down(PL_MOUSE_BUTTON_LEFT))
-        gptCtx->uNextActiveId = uHash;
-
-    if(bHovered && pl_is_mouse_released(PL_MOUSE_BUTTON_LEFT))
-    {
-        gptCtx->uNextActiveId = 0;
-        bTriggered = uHash == gptCtx->uActiveId;
+    if(bPressed)
         *pbOpenState = !*pbOpenState;
-    }
 
-    if(gptCtx->uActiveId == uHash) pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tEndPos, gptCtx->tStyle.tHeaderActiveCol);
-    else if(bHovered)              pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tEndPos, gptCtx->tStyle.tHeaderHoveredCol);
-    else                           pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tEndPos, gptCtx->tStyle.tHeaderCol);
+    if(bHeld)         pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tEndPos, gptCtx->tStyle.tHeaderActiveCol);
+    else if(bHovered) pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tEndPos, gptCtx->tStyle.tHeaderHoveredCol);
+    else              pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tEndPos, gptCtx->tStyle.tHeaderCol);
 
     if(*pbOpenState)
     {
@@ -510,16 +535,15 @@ pl_ui_collapsing_header(const char* pcText, bool* pbOpenState)
     pl_add_text(ptWindow->ptFgLayer, gptCtx->ptFont, gptCtx->tStyle.fFontSize, tTextStartPos, gptCtx->tStyle.tTextCol, pcText, -1.0f);
     pl__ui_item_add_size(tTextSize.x + gptCtx->tStyle.tInnerSpacing.x + gptCtx->tStyle.tFramePadding.x + fFrameHeight, fFrameHeight);
     pl__ui_next_line();
-    gptCtx->tPrevItemData.bHovered = bHovered;
     return *pbOpenState; 
 }
 
 bool
 pl_ui_tree_node(const char* pcText, bool* pbOpenState)
 {
-
     plUiWindow* ptWindow = gptCtx->ptCurrentWindow;
-    const uint32_t uHash = pl_str_hash(pcText, 0, 0);
+    const uint32_t uHash = pl_str_hash(pcText, 0, pl_sb_top(gptCtx->sbuIdStack));
+    pl_sb_push(gptCtx->sbuIdStack, uHash);
     const float fFrameHeight = pl__ui_get_frame_height();
 
     const plVec2 tSize = {pl__ui_get_window_content_width_available(), fFrameHeight};
@@ -533,24 +557,16 @@ pl_ui_tree_node(const char* pcText, bool* pbOpenState)
         .y = roundf(tStartPos.y + fFrameHeight / 2.0f - tTextSize.y / 2.0f)
     };
 
-    if(pl__ui_is_mouse_hovering_rect(tStartPos, tEndPos) && ptWindow == gptCtx->ptHoveredWindow) gptCtx->uNextHoveredId = uHash;
-    const bool bHovered = gptCtx->uHoveredId == uHash;
-    bool bTriggered = false;
+    const plRect tBoundingBox = pl_calculate_rect(tStartPos, tSize);
+    bool bHovered = false;
+    bool bHeld = false;
+    const bool bPressed = pl__ui_button_behavior(&tBoundingBox, uHash, &bHovered, &bHeld);
 
-    if(bTriggered && pl_is_mouse_down(PL_MOUSE_BUTTON_LEFT))
-        gptCtx->uNextActiveId = uHash;
-
-    if(bHovered && pl_is_mouse_released(PL_MOUSE_BUTTON_LEFT))
-    {
-        gptCtx->uNextActiveId = 0;
-        bTriggered = uHash == gptCtx->uActiveId;
+    if(bPressed)
         *pbOpenState = !*pbOpenState;
-    }
 
-    if(gptCtx->uActiveId == uHash)
-        pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tEndPos, gptCtx->tStyle.tHeaderActiveCol);
-    else if(bHovered)
-        pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tEndPos, gptCtx->tStyle.tHeaderHoveredCol);
+    if(bHeld)         pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tEndPos, gptCtx->tStyle.tHeaderActiveCol);
+    else if(bHovered) pl_add_rect_filled(ptWindow->ptFgLayer, tStartPos, tEndPos, gptCtx->tStyle.tHeaderHoveredCol);
 
     if(*pbOpenState)
     {
@@ -573,7 +589,6 @@ pl_ui_tree_node(const char* pcText, bool* pbOpenState)
     pl_add_text(ptWindow->ptFgLayer, gptCtx->ptFont, gptCtx->tStyle.fFontSize, tTextStartPos, gptCtx->tStyle.tTextCol, pcText, -1.0f);
     pl__ui_item_add_size(tTextSize.x + gptCtx->tStyle.tInnerSpacing.x + gptCtx->tStyle.tFramePadding.x + fFrameHeight, fFrameHeight);
     pl__ui_next_line();
-    gptCtx->tPrevItemData.bHovered = bHovered;
     return *pbOpenState; 
 }
 
@@ -583,6 +598,7 @@ pl_ui_tree_pop(void)
     plUiWindow* ptWindow = gptCtx->ptCurrentWindow;
     ptWindow->uTreeDepth--;
     ptWindow->tCursorPos.x -= gptCtx->tStyle.fIndentSize;
+    pl_sb_pop(gptCtx->sbuIdStack);
 }
 
 void
@@ -636,7 +652,6 @@ pl_ui_progress_bar(float fFraction, plVec2 tSize, const char* pcOverlay)
         .y = tInitialCursorPos.y + fFrameHeight / 2.0f - tTextSize.y / 2.0f
     };
 
-
     if(tTextStartPos.x + tTextSize.x > ptWindow->tCursorPos.x + tSize.x)
         tTextStartPos.x = ptWindow->tCursorPos.x + tSize.x - tTextSize.x - gptCtx->tStyle.tInnerSpacing.x;
 
@@ -684,6 +699,12 @@ pl_ui_was_last_item_hovered(void)
     return gptCtx->tPrevItemData.bHovered;
 }
 
+bool
+pl_ui_was_last_item_active(void)
+{
+    return gptCtx->tPrevItemData.bActive;
+}
+
 void
 pl_ui_set_dark_theme(plUiContext* ptCtx)
 {
@@ -720,12 +741,54 @@ pl_ui_set_dark_theme(plUiContext* ptCtx)
 //-----------------------------------------------------------------------------
 
 static bool
-pl__ui_is_mouse_hovering_rect(plVec2 minVec, plVec2 maxVec)
+pl__ui_is_item_hoverable(const plRect* ptBox, uint32_t uHash)
 {
-    const plVec2 tMousePos = pl_get_mouse_pos();
-    if( tMousePos.x >= minVec.x && tMousePos.y >= minVec.y && tMousePos.x <= maxVec.x && tMousePos.y <= maxVec.y)
-        return true;
-    return false;
+    plUiWindow* ptWindow = gptCtx->ptCurrentWindow;
+
+    if(!pl__ui_is_mouse_hovering_rect(ptBox->tMin, ptBox->tMax))
+        return false;
+
+    if(ptWindow != gptCtx->ptHoveredWindow)
+        return false;
+
+    return true;
+}
+
+static bool
+pl__ui_button_behavior(const plRect* ptBox, uint32_t uHash, bool* pbOutHovered, bool* pbOutHeld)
+{
+    plUiWindow* ptWindow = gptCtx->ptCurrentWindow;
+    gptCtx->tPrevItemData.bActive = false;
+
+    bool bPressed = false;
+    bool bHovered = pl__ui_is_item_hoverable(ptBox, uHash);
+
+    if(bHovered)
+        gptCtx->uNextHoveredId = uHash;
+
+    bool bHeld = bHovered && pl_is_mouse_down(PL_MOUSE_BUTTON_LEFT);
+
+    if(bHeld && uHash == gptCtx->uActiveId)
+        gptCtx->uNextActiveId = uHash;
+
+    if(bHovered)
+    {
+        if(pl_is_mouse_clicked(PL_MOUSE_BUTTON_LEFT, false))
+        {
+            gptCtx->uNextActiveId = uHash;
+            gptCtx->tPrevItemData.bActive = true;
+        }
+        else if(pl_is_mouse_released(PL_MOUSE_BUTTON_LEFT))
+        {
+            gptCtx->uNextActiveId = 0;
+            bPressed = uHash == gptCtx->uActiveId;
+        }
+    }
+
+    *pbOutHeld = bHeld;
+    *pbOutHovered = bHovered;
+    gptCtx->tPrevItemData.bHovered = bHovered;
+    return bPressed;
 }
 
 static bool
@@ -735,26 +798,6 @@ pl__ui_does_triangle_contain_point(plVec2 p0, plVec2 p1, plVec2 p2, plVec2 point
     bool b2 = ((point.x - p2.x) * (p1.y - p2.y) - (point.y - p2.y) * (p1.x - p2.x)) < 0.0f;
     bool b3 = ((point.x - p0.x) * (p2.y - p0.y) - (point.y - p0.y) * (p2.x - p0.x)) < 0.0f;
     return ((b1 == b2) && (b2 == b3));
-}
-
-static bool
-pl__ui_does_circle_contain_point(plVec2 cen, float radius, plVec2 point)
-{
-    float distanceSquared = powf(point.x - cen.x, 2) + powf(point.y - cen.y, 2);
-    return distanceSquared <= radius*radius;
-}
-
-static float
-pl__ui_get_frame_height(void)
-{
-    return gptCtx->tStyle.fFontSize + gptCtx->tStyle.tFramePadding.y * 2.0f;
-}
-
-static void
-pl__ui_advance_cursor(float x, float y)
-{
-    gptCtx->ptCurrentWindow->tCursorPos.x += x;
-    gptCtx->ptCurrentWindow->tCursorPos.y += y;
 }
 
 static void
@@ -775,16 +818,4 @@ pl__ui_item_add_size(float fWidth, float fHeight)
 
     gptCtx->ptCurrentWindow->tContentMaxSize.x = fNewWidth > gptCtx->ptCurrentWindow->tContentMaxSize.x ? fNewWidth : gptCtx->ptCurrentWindow->tContentMaxSize.x;
     gptCtx->ptCurrentWindow->tContentMaxSize.y = fNewHeight > gptCtx->ptCurrentWindow->tContentMaxSize.y ? fNewHeight : gptCtx->ptCurrentWindow->tContentMaxSize.y;
-}
-
-static float
-pl__ui_get_window_content_width(void)
-{
-    return gptCtx->ptCurrentWindow->tSize.x - gptCtx->tStyle.fWindowHorizontalPadding * 2.0f;
-}
-
-static float
-pl__ui_get_window_content_width_available(void)
-{
-    return pl__ui_get_window_content_width() - (gptCtx->ptCurrentWindow->tCursorPos.x - gptCtx->ptCurrentWindow->tContentPos.x);
 }
