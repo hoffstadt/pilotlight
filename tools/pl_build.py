@@ -518,8 +518,6 @@ def register_standard_profiles():
 
         with platform(PlatformType.MACOS):
             with compiler("clang", CompilerType.CLANG):
-                add_compiler_flags("-fmodules", "-ObjC")
-                add_frameworks("Metal", "MetalKit", "Cocoa", "IOKit", "CoreVideo", "QuartzCore")
                 add_link_library("vulkan")
                 set_output_directory(None)
                 set_output_binary(None)
@@ -546,7 +544,8 @@ def register_standard_profiles():
 
         with platform(PlatformType.MACOS):
             with compiler("clang", CompilerType.CLANG):
-                add_compiler_flags("-std=c99", "--debug", "-g")
+                add_compiler_flags("-std=c99", "--debug", "-g", "-fmodules", "-ObjC")
+                add_frameworks("Metal", "MetalKit", "Cocoa", "IOKit", "CoreVideo", "QuartzCore")
                 set_output_directory(None)
                 set_output_binary(None)
 
