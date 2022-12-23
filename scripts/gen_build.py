@@ -21,7 +21,6 @@ with pl.project("pilotlight"):
     pl.set_main_target("pilot_light")
 
     pl.push_profile(pl.Profile.PILOT_LIGHT_DEBUG)
-    pl.push_profile(pl.Profile.VULKAN)
 
     pl.push_definitions("_USE_MATH_DEFINES", "PL_PROFILING_ON", "PL_ALLOW_HOT_RELOAD", "PL_ENABLE_VALIDATION_LAYERS")
     pl.push_include_directories("../out", "../dependencies/stb", "../src", "../extensions")
@@ -36,6 +35,7 @@ with pl.project("pilotlight"):
         pl.push_source_files("pilotlight.c")
         pl.push_output_binary("pilotlight")
 
+        pl.push_profile(pl.Profile.VULKAN)
         pl.push_definitions("PL_VULKAN_BACKEND")
         with pl.configuration("debug"):
             with pl.platform(pl.PlatformType.WIN32):
@@ -48,6 +48,7 @@ with pl.project("pilotlight"):
                 with pl.compiler("clang", pl.CompilerType.CLANG):
                     pass
         pl.pop_definitions()
+        pl.pop_profile() 
 
         with pl.configuration("debugdx11"):
             with pl.platform(pl.PlatformType.WIN32):
@@ -71,6 +72,7 @@ with pl.project("pilotlight"):
         pl.push_source_files("../extensions/pl_draw_extension.c")
         pl.push_target_links("pl_lib")
 
+        pl.push_profile(pl.Profile.VULKAN)
         pl.push_definitions("PL_VULKAN_BACKEND")
         with pl.configuration("debug"):
             with pl.platform(pl.PlatformType.WIN32):
@@ -83,6 +85,7 @@ with pl.project("pilotlight"):
                 with pl.compiler("clang", pl.CompilerType.CLANG):
                     pass
         pl.pop_definitions()
+        pl.pop_profile() 
 
         with pl.configuration("debugdx11"):
             with pl.platform(pl.PlatformType.WIN32):
@@ -106,6 +109,7 @@ with pl.project("pilotlight"):
         pl.push_output_binary("app")
         pl.push_target_links("pl_lib")
 
+        pl.push_profile(pl.Profile.VULKAN)
         pl.push_definitions("PL_VULKAN_BACKEND")
         pl.push_source_files("app_vulkan.c")
         with pl.configuration("debug"):
@@ -120,6 +124,7 @@ with pl.project("pilotlight"):
                     pass
         pl.pop_definitions()
         pl.pop_source_files()
+        pl.pop_profile() 
 
         with pl.configuration("debugdx11"):
             with pl.platform(pl.PlatformType.WIN32):
@@ -144,6 +149,7 @@ with pl.project("pilotlight"):
         pl.push_output_binary("pilot_light")
         pl.push_target_links("pl_lib")
                
+        pl.push_profile(pl.Profile.VULKAN)
         pl.push_definitions("PL_VULKAN_BACKEND")
         with pl.configuration("debug"):
             with pl.platform(pl.PlatformType.WIN32):
@@ -157,6 +163,7 @@ with pl.project("pilotlight"):
                 with pl.compiler("clang", pl.CompilerType.CLANG):
                     pl.add_source_file("pl_main_macos.m")
         pl.pop_definitions()
+        pl.pop_profile() 
 
         with pl.configuration("debugdx11"):
             with pl.platform(pl.PlatformType.WIN32):
@@ -177,6 +184,5 @@ with pl.project("pilotlight"):
     pl.pop_include_directories()
     pl.pop_link_directories()
     pl.pop_output_directory()  
-    pl.pop_profile()    
     pl.pop_profile()    
 pl.generate_build_script("build")
