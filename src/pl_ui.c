@@ -794,7 +794,6 @@ pl_ui_begin_tab(const char* pcText)
     plUiWindow* ptWindow = gptCtx->ptCurrentWindow;
     plUiTabBar* ptTabBar = gptCtx->ptCurrentTabBar;
     const float fFrameHeight = pl__ui_get_frame_height();
-    const uint32_t blah = pl_sb_size(gptCtx->sbuIdStack); (void)blah;
     const uint32_t uHash = pl_str_hash(pcText, 0, pl_sb_top(gptCtx->sbuIdStack));
     pl_sb_push(gptCtx->sbuIdStack, uHash);
 
