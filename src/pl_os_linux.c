@@ -14,7 +14,8 @@ Index of this file:
 // [SECTION] includes
 //-----------------------------------------------------------------------------
 
-#include <string.h> // memset, strncpy
+#include <stdlib.h>       // malloc
+#include <string.h>       // memset, strncpy
 #include <time.h>         // nanosleep
 #include "pl_os.h"
 #include <stdio.h>        // file api

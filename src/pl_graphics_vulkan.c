@@ -2628,7 +2628,7 @@ pl__select_physical_device(VkInstance tInstance, plDevice* ptDeviceOut)
 
     for(uint32_t i = 0; i < uExtensionCount; i++)
     {
-        if(pl_str_equal(ptExtensions[i].extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME))    ptDeviceOut->bSwapchainExtPresent = true;
+        if(pl_str_equal(ptExtensions[i].extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) ptDeviceOut->bSwapchainExtPresent = true; //-V522
     }
 
 
