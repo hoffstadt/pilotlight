@@ -96,6 +96,7 @@ uint32_t              pl_create_vertex_buffer         (plResourceManager* ptReso
 uint32_t              pl_create_constant_buffer       (plResourceManager* ptResourceManager, size_t szItemSize, size_t szItemCount);
 uint32_t              pl_create_texture               (plResourceManager* ptResourceManager, plTextureDesc tDesc, size_t szSize, const void* pData);
 uint32_t              pl_create_storage_buffer        (plResourceManager* ptResourceManager, size_t szSize, const void* pData);
+VkDescriptorSetLayout pl_request_descriptor_set_layout(plResourceManager* ptResourceManager, plBindGroupLayout* ptLayout);
 
 // constant buffer helpers
 void*                 pl_get_constant_buffer_data     (plResourceManager* ptResourceManager, uint32_t uBuffer, uint32_t uInstance);
@@ -118,7 +119,7 @@ uint32_t              pl_create_shader             (plResourceManager* ptResourc
 void                  pl_submit_shader_for_deletion(plResourceManager* ptResourceManager, uint32_t uShaderIndex);
 
 // descriptors
-void                  pl_create_bind_group            (plGraphics* ptGraphics, plBindGroupLayout* ptLayout, plBindGroup* ptGroupOut);
+void                  pl_create_bind_group            (plGraphics* ptGraphics, plBindGroupLayout* ptLayout, plBindGroup* ptGroupOut, const char* pcName);
 void                  pl_update_bind_group            (plGraphics* ptGraphics, plBindGroup* ptGroup, uint32_t uBufferCount, uint32_t* auBuffers, uint32_t uTextureCount, uint32_t* auTextures);
 
 // drawing
@@ -324,16 +325,16 @@ typedef struct _plShaderDesc
     plGraphicsState    tGraphicsState;
     const char*        pcVertexShader;
     const char*        pcPixelShader;
-    plBindGroupLayout* atBindGroupLayouts;
+    plBindGroupLayout  atBindGroupLayouts[4];
     uint32_t           uBindGroupLayoutCount;
     VkRenderPass       _tRenderPass;
 } plShaderDesc;
 
 typedef struct _plShader
 {
-    plShaderDesc     tDesc;
-    VkPipelineLayout _tPipelineLayout;
-    VkPipeline       _tPipeline;
+    plShaderDesc      tDesc;
+    VkPipelineLayout  _tPipelineLayout;
+    VkPipeline        _tPipeline;
 } plShader;
 
 typedef struct _plResourceManager
@@ -369,6 +370,10 @@ typedef struct _plResourceManager
     VkBuffer          _tStagingBuffer;
     VkDeviceMemory    _tStagingBufferMemory;
     unsigned char*    _pucMapping;
+
+    // descriptor set layouts
+    VkDescriptorSetLayout* _sbtDescriptorSetLayouts;
+    uint32_t*              _sbuDescriptorSetLayoutHashes;
 
 } plResourceManager;
 
@@ -419,6 +424,7 @@ typedef struct _plDevice
     VkPhysicalDeviceMemoryProperties2         tMemProps2;
     VkPhysicalDeviceMemoryBudgetPropertiesEXT tMemBudgetInfo;
     VkDeviceSize                              tMaxLocalMemSize;
+    bool                                      bSwapchainExtPresent;
 
 } plDevice;
 
@@ -436,6 +442,12 @@ typedef struct _plGraphics
     plFrameContext*          sbFrames;
     uint32_t                 uFramesInFlight;  // number of frames in flight (should be less then PL_MAX_FRAMES_IN_FLIGHT)
     size_t                   szCurrentFrameIndex; // current frame being used
+
+	PFN_vkDebugMarkerSetObjectTagEXT  vkDebugMarkerSetObjectTag;
+	PFN_vkDebugMarkerSetObjectNameEXT vkDebugMarkerSetObjectName;
+	PFN_vkCmdDebugMarkerBeginEXT      vkCmdDebugMarkerBegin;
+	PFN_vkCmdDebugMarkerEndEXT        vkCmdDebugMarkerEnd;
+	PFN_vkCmdDebugMarkerInsertEXT     vkCmdDebugMarkerInsert;
 } plGraphics;
 
 #endif //PL_GRAPHICS_VULKAN_H
