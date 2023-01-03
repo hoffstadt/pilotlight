@@ -17,6 +17,8 @@ Index of this file:
 #include "pl_graphics_vulkan.h"
 #include "pl_ds.h"
 #include "pl_io.h"
+#include "pl_memory.h"
+#include "pl_string.h"
 #include <stdio.h>
 
 #ifdef _WIN32
@@ -97,6 +99,12 @@ pl_setup_graphics(plGraphics* ptGraphics)
 
     // create devices
     pl__create_device(ptGraphics->tInstance, ptGraphics->tSurface, &ptGraphics->tDevice, true);
+
+	ptGraphics->vkDebugMarkerSetObjectTag = (PFN_vkDebugMarkerSetObjectTagEXT)vkGetDeviceProcAddr(ptGraphics->tDevice.tLogicalDevice, "vkDebugMarkerSetObjectTagEXT");
+	ptGraphics->vkDebugMarkerSetObjectName = (PFN_vkDebugMarkerSetObjectNameEXT)vkGetDeviceProcAddr(ptGraphics->tDevice.tLogicalDevice, "vkDebugMarkerSetObjectNameEXT");
+	ptGraphics->vkCmdDebugMarkerBegin = (PFN_vkCmdDebugMarkerBeginEXT)vkGetDeviceProcAddr(ptGraphics->tDevice.tLogicalDevice, "vkCmdDebugMarkerBeginEXT");
+	ptGraphics->vkCmdDebugMarkerEnd = (PFN_vkCmdDebugMarkerEndEXT)vkGetDeviceProcAddr(ptGraphics->tDevice.tLogicalDevice, "vkCmdDebugMarkerEndEXT");
+	ptGraphics->vkCmdDebugMarkerInsert = (PFN_vkCmdDebugMarkerInsertEXT)vkGetDeviceProcAddr(ptGraphics->tDevice.tLogicalDevice, "vkCmdDebugMarkerInsertEXT");
     
     // create swapchain
     ptGraphics->tSwapchain.bVSync = true;
@@ -482,9 +490,8 @@ pl_create_shader(plResourceManager* ptResourceManager, const plShaderDesc* ptDes
 
     VkDescriptorSetLayout atDescriptorSetLayouts[4] = {0};
     for(uint32_t i = 0; i < ptDesc->uBindGroupLayoutCount; i++)
-    {
         atDescriptorSetLayouts[i] = tShader.tDesc.atBindGroupLayouts[i]._tDescriptorSetLayout;
-    }
+
     const VkPipelineLayoutCreateInfo tPipelineLayoutInfo = {
         .sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = ptDesc->uBindGroupLayoutCount,
@@ -808,44 +815,17 @@ pl_submit_shader_for_deletion(plResourceManager* ptResourceManager, uint32_t uSh
 }
 
 void
-pl_create_bind_group(plGraphics* ptGraphics, plBindGroupLayout* ptLayout, plBindGroup* ptGroupOut)
+pl_create_bind_group(plGraphics* ptGraphics, plBindGroupLayout* ptLayout, plBindGroup* ptGroupOut, const char* pcName)
 {
-    if(ptLayout->_tDescriptorSetLayout == VK_NULL_HANDLE)
-    {
-        VkDescriptorSetLayoutBinding* sbtDescriptorSetLayoutBindings = NULL;
-        for(uint32_t i = 0 ; i < ptLayout->uBufferCount; i++)
-        {
-            VkDescriptorSetLayoutBinding tBinding = {
-                .binding            = ptLayout->aBuffers[i].uSlot,
-                .descriptorType     = ptLayout->aBuffers[i].tType == PL_BUFFER_BINDING_TYPE_STORAGE ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-                .descriptorCount    = 1,
-                .stageFlags         = ptLayout->aBuffers[i].tStageFlags,
-                .pImmutableSamplers = NULL
-            };
-            pl_sb_push(sbtDescriptorSetLayoutBindings, tBinding);
-        }
+    ptLayout->_tDescriptorSetLayout = pl_request_descriptor_set_layout(&ptGraphics->tResourceManager, ptLayout);
 
-        for(uint32_t i = 0 ; i < ptLayout->uTextureCount; i++)
-        {
-            VkDescriptorSetLayoutBinding tBinding = {
-                .binding            = ptLayout->aTextures[i].uSlot,
-                .descriptorType     = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount    = 1,
-                .stageFlags         = ptLayout->aTextures[i].tStageFlags,
-                .pImmutableSamplers = NULL
-            };
-            pl_sb_push(sbtDescriptorSetLayoutBindings, tBinding);
-        }
-
-        const VkDescriptorSetLayoutCreateInfo tDescriptorSetLayoutInfo = {
-            .sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .bindingCount = pl_sb_size(sbtDescriptorSetLayoutBindings),
-            .pBindings    = sbtDescriptorSetLayoutBindings,
-        };
-        PL_VULKAN(vkCreateDescriptorSetLayout(ptGraphics->tDevice.tLogicalDevice, &tDescriptorSetLayoutInfo, NULL, &ptLayout->_tDescriptorSetLayout));
-
-        pl_sb_free(sbtDescriptorSetLayoutBindings);
-    }
+        //     VkDebugMarkerObjectNameInfoEXT tNameInfo = {
+        //     .sType       = VK_STRUCTURE_TYPE_DEBUG_MARKER_OBJECT_NAME_INFO_EXT,
+        //     .objectType  = VK_DEBUG_REPORT_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT_EXT,
+        //     .object      = (uint64_t)ptLayout->_tDescriptorSetLayout,
+        //     .pObjectName = pcName
+        // };
+        // ptGraphics->vkDebugMarkerSetObjectName(ptGraphics->tDevice.tLogicalDevice, &tNameInfo);  
 
     if(ptGroupOut)
     {
@@ -1097,14 +1077,6 @@ pl_process_cleanup_queue(plResourceManager* ptResourceManager, uint32_t uFramesT
 
             vkDestroyPipelineLayout(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, ptShader->_tPipelineLayout, NULL);
             vkDestroyPipeline(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, ptShader->_tPipeline, NULL);
-            for(uint32_t j = 0; j < ptShader->tDesc.uBindGroupLayoutCount; j++)
-            {
-                if(ptShader->tDesc.atBindGroupLayouts[j]._tDescriptorSetLayout)
-                {
-                    vkDestroyDescriptorSetLayout(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, ptShader->tDesc.atBindGroupLayouts[j]._tDescriptorSetLayout, NULL);
-                    ptShader->tDesc.atBindGroupLayouts[j]._tDescriptorSetLayout = VK_NULL_HANDLE;
-                }
-            }
 
             // add to free indices
             pl_sb_push(ptResourceManager->_sbulShaderFreeIndices, uShaderIndex);
@@ -1562,6 +1534,69 @@ pl_create_storage_buffer(plResourceManager* ptResourceManager, size_t szSize, co
     return ulBufferIndex;
 }
 
+VkDescriptorSetLayout
+pl_request_descriptor_set_layout(plResourceManager* ptResourceManager, plBindGroupLayout* ptLayout)
+{
+    
+    // generate hash
+    uint32_t uHash = 0;
+    VkDescriptorSetLayoutBinding* sbtDescriptorSetLayoutBindings = NULL;
+    for(uint32_t i = 0 ; i < ptLayout->uBufferCount; i++)
+    {
+        uHash = pl_str_hash_data(&ptLayout->aBuffers[i].uSlot, sizeof(uint32_t), uHash);
+        uHash = pl_str_hash_data(&ptLayout->aBuffers[i].tType, sizeof(int), uHash);
+        uHash = pl_str_hash_data(&ptLayout->aBuffers[i].tStageFlags, sizeof(VkShaderStageFlags), uHash);
+
+        VkDescriptorSetLayoutBinding tBinding = {
+            .binding            = ptLayout->aBuffers[i].uSlot,
+            .descriptorType     = ptLayout->aBuffers[i].tType == PL_BUFFER_BINDING_TYPE_STORAGE ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+            .descriptorCount    = 1,
+            .stageFlags         = ptLayout->aBuffers[i].tStageFlags,
+            .pImmutableSamplers = NULL
+        };
+        pl_sb_push(sbtDescriptorSetLayoutBindings, tBinding);
+    }
+
+    for(uint32_t i = 0 ; i < ptLayout->uTextureCount; i++)
+    {
+        uHash = pl_str_hash_data(&ptLayout->aTextures[i].uSlot, sizeof(uint32_t), uHash);
+        uHash = pl_str_hash_data(&ptLayout->aTextures[i].tStageFlags, sizeof(VkShaderStageFlags), uHash);
+
+        VkDescriptorSetLayoutBinding tBinding = {
+            .binding            = ptLayout->aTextures[i].uSlot,
+            .descriptorType     = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount    = 1,
+            .stageFlags         = ptLayout->aTextures[i].tStageFlags,
+            .pImmutableSamplers = NULL
+        };
+        pl_sb_push(sbtDescriptorSetLayoutBindings, tBinding);
+    }
+
+    // check if hash exists
+    for(uint32_t i = 0; i < pl_sb_size(ptResourceManager->_sbuDescriptorSetLayoutHashes); i++)
+    {
+        if(ptResourceManager->_sbuDescriptorSetLayoutHashes[i] == uHash)
+        {
+            pl_sb_free(sbtDescriptorSetLayoutBindings);
+            return ptResourceManager->_sbtDescriptorSetLayouts[i];
+        }
+    }
+
+    // create descriptor set layout
+    VkDescriptorSetLayout tDescriptorSetLayout = VK_NULL_HANDLE;
+    const VkDescriptorSetLayoutCreateInfo tDescriptorSetLayoutInfo = {
+        .sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = pl_sb_size(sbtDescriptorSetLayoutBindings),
+        .pBindings    = sbtDescriptorSetLayoutBindings,
+    };
+    PL_VULKAN(vkCreateDescriptorSetLayout(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, &tDescriptorSetLayoutInfo, NULL, &tDescriptorSetLayout));
+
+    pl_sb_push(ptResourceManager->_sbuDescriptorSetLayoutHashes, uHash);
+    pl_sb_push(ptResourceManager->_sbtDescriptorSetLayouts, tDescriptorSetLayout);
+    pl_sb_free(sbtDescriptorSetLayoutBindings);
+    return tDescriptorSetLayout;
+}
+
 void*
 pl_get_constant_buffer_data(plResourceManager* ptResourceManager, uint32_t uBuffer, uint32_t uInstance)
 {
@@ -1882,9 +1917,13 @@ pl__create_instance(plGraphics* ptGraphics, uint32_t uVersion, bool bEnableValid
     #endif
 
     if(bEnableValidation)
+    {
         pl_sb_push(sbpcEnabledExtensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        pl_sb_push(sbpcEnabledExtensions, VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+    }
 
     pl__create_instance_ex(ptGraphics, uVersion, bEnableValidation ? 1 : 0, &pcKhronosValidationLayer, pl_sb_size(sbpcEnabledExtensions), sbpcEnabledExtensions);
+    pl_sb_free(sbpcEnabledExtensions);
 }
 
 static void
@@ -2088,22 +2127,26 @@ pl__create_device(VkInstance tInstance, VkSurfaceKHR tSurface, plDevice* ptDevic
     };
     
     static const char* pcValidationLayers = "VK_LAYER_KHRONOS_validation";
-    static const char* apcExtensions[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_portability_subset"};
+
+    const char** sbpcDeviceExts = NULL;
+    if(ptDeviceOut->bSwapchainExtPresent)   pl_sb_push(sbpcDeviceExts, VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    pl_sb_push(sbpcDeviceExts, VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
+    #ifdef __APPLE__
+        pl_sb_push(sbpcDeviceExts, "VK_KHR_portability_subset");
+    #endif
     VkDeviceCreateInfo tCreateDeviceInfo = {
         .sType                    = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         .queueCreateInfoCount     = atQueueCreateInfos[0].queueFamilyIndex == atQueueCreateInfos[1].queueFamilyIndex ? 1 : 2,
         .pQueueCreateInfos        = atQueueCreateInfos,
         .pEnabledFeatures         = &atDeviceFeatures,
-        .ppEnabledExtensionNames  = apcExtensions,
+        .ppEnabledExtensionNames  = sbpcDeviceExts,
         .enabledLayerCount        = bEnableValidation ? 1 : 0,
         .ppEnabledLayerNames      = bEnableValidation ? &pcValidationLayers : NULL,
-        #ifdef __APPLE__
-            .enabledExtensionCount = 2u,
-        #else
-            .enabledExtensionCount = 1u
-        #endif
+        .enabledExtensionCount    = pl_sb_size(sbpcDeviceExts)
     };
     PL_VULKAN(vkCreateDevice(ptDeviceOut->tPhysicalDevice, &tCreateDeviceInfo, NULL, &ptDeviceOut->tLogicalDevice));
+
+    pl_sb_free(sbpcDeviceExts);
 
     // get device queues
     vkGetDeviceQueue(ptDeviceOut->tLogicalDevice, ptDeviceOut->iGraphicsQueueFamily, 0, &ptDeviceOut->tGraphicsQueue);
@@ -2476,6 +2519,12 @@ pl__cleanup_resource_manager(plResourceManager* ptResourceManager)
             pl_submit_shader_for_deletion(ptResourceManager, i);
     }
 
+    for(uint32_t i = 0; i < pl_sb_size(ptResourceManager->_sbtDescriptorSetLayouts); i++)
+    {
+        vkDestroyDescriptorSetLayout(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, ptResourceManager->_sbtDescriptorSetLayouts[i], NULL);
+        ptResourceManager->_sbtDescriptorSetLayouts[i] = VK_NULL_HANDLE;
+    }
+
     pl_process_cleanup_queue(ptResourceManager, 100); // free deletion queued resources
 
     pl_sb_free(ptResourceManager->sbtBuffers);
@@ -2488,6 +2537,8 @@ pl__cleanup_resource_manager(plResourceManager* ptResourceManager)
     pl_sb_free(ptResourceManager->_sbulTextureDeletionQueue);
     pl_sb_free(ptResourceManager->_sbulShaderDeletionQueue);
     pl_sb_free(ptResourceManager->_sbulTempQueue);
+    pl_sb_free(ptResourceManager->_sbuDescriptorSetLayoutHashes);
+    pl_sb_free(ptResourceManager->_sbtDescriptorSetLayouts);
 
     ptResourceManager->_ptDevice = NULL;
     ptResourceManager->_ptGraphics = NULL;
@@ -2525,6 +2576,7 @@ pl__select_physical_device(VkInstance tInstance, plDevice* ptDeviceOut)
     int iBestDvcIdx = 0;
     bool bDiscreteGPUFound = false;
     VkDeviceSize tMaxLocalMemorySize = 0u;
+    // bDebugMarkerExtensionPresent
 
     PL_VULKAN(vkEnumeratePhysicalDevices(tInstance, &uDeviceCount, NULL));
     PL_ASSERT(uDeviceCount > 0 && "failed to find GPUs with Vulkan support!");
@@ -2568,6 +2620,19 @@ pl__select_physical_device(VkInstance tInstance, plDevice* ptDeviceOut)
     printf("Driver Version: %u\n", ptDeviceOut->tDeviceProps.driverVersion);
     printf("Device Type: %s\n", pacDeviceTypeName[ptDeviceOut->tDeviceProps.deviceType]);
     printf("Device Name: %s\n", ptDeviceOut->tDeviceProps.deviceName);
+
+    uint32_t uExtensionCount = 0;
+    vkEnumerateDeviceExtensionProperties(ptDeviceOut->tPhysicalDevice, NULL, &uExtensionCount, NULL);
+    VkExtensionProperties* ptExtensions = pl_alloc(uExtensionCount * sizeof(VkExtensionProperties));
+    vkEnumerateDeviceExtensionProperties(ptDeviceOut->tPhysicalDevice, NULL, &uExtensionCount, ptExtensions);
+
+    for(uint32_t i = 0; i < uExtensionCount; i++)
+    {
+        if(pl_str_equal(ptExtensions[i].extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) ptDeviceOut->bSwapchainExtPresent = true; //-V522
+    }
+
+
+    pl_free(ptExtensions);
     return iBestDvcIdx;
 }
 

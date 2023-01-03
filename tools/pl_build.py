@@ -1,4 +1,4 @@
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 ###############################################################################
 #                                  Info                                       #
@@ -1213,7 +1213,7 @@ def generate_linux_build(name_override=None):
                                             if settings._vulkan_glsl_shader_files:
                                                 buffer += '\n\n# cleanup old glsl vulkan shaders\n'
                                                 for vulkan_glsl_shader in settings._vulkan_glsl_shader_files:
-                                                    buffer += 'rm -f ./' + settings._output_directory + '/' + vulkan_glsl_shader + '.spv\n'
+                                                    buffer += 'rm -f ./' + settings._output_directory + '/' + vulkan_glsl_shader[1] + '.spv\n'
 
                                                 buffer += '\n# compile glsl vulkan shaders\n'
                                                 for vulkan_glsl_shader in settings._vulkan_glsl_shader_files:
