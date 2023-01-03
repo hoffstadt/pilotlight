@@ -10,7 +10,10 @@
 #endif
 
 #include "pl_draw.c"
+
+#ifdef PL_VULKAN_BACKEND
 #include "pl_renderer.c"
+#endif
 #include "pl_ui.c"
 
 #define PL_MEMORY_IMPLEMENTATION
