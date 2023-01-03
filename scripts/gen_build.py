@@ -112,6 +112,7 @@ with pl.project("pilotlight"):
         pl.push_profile(pl.Profile.VULKAN)
         pl.push_definitions("PL_VULKAN_BACKEND")
         pl.push_source_files("app_vulkan.c")
+        pl.push_vulkan_glsl_files("../shaders/glsl/", "phong.frag", "vertex_shader.vert")
         with pl.configuration("debug"):
             with pl.platform(pl.PlatformType.WIN32):
                 with pl.compiler("msvc", pl.CompilerType.MSVC):
@@ -125,6 +126,7 @@ with pl.project("pilotlight"):
         pl.pop_definitions()
         pl.pop_source_files()
         pl.pop_profile() 
+        pl.pop_vulkan_glsl_files() 
 
         with pl.configuration("debugdx11"):
             with pl.platform(pl.PlatformType.WIN32):
