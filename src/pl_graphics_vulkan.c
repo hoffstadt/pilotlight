@@ -462,42 +462,19 @@ pl_submit_command_buffer(plGraphics* ptGraphics, plDevice* ptDevice, VkCommandBu
     vkFreeCommandBuffers(ptDevice->tLogicalDevice, ptGraphics->tCmdPool, 1, &tCmdBuffer);
 }
 
-uint32_t
-pl_create_shader(plResourceManager* ptResourceManager, const plShaderDesc* ptDesc)
+typedef struct _plVariantInfo
 {
-    PL_ASSERT(ptDesc->uBindGroupLayoutCount < 5 && "only 4 descriptor sets allowed per pipeline.");
+    VkShaderModuleCreateInfo tVertexShaderInfo;
+    VkShaderModuleCreateInfo tPixelShaderInfo;
+    VkPipelineLayout         tPipelineLayout;
+    VkRenderPass             tRenderPass;
+    VkSpecializationInfo     tSpecializationInfo;
+} plVariantInfo;
 
-    // hash shader
-    uint32_t uHash = pl_str_hash_data(&ptDesc->tGraphicsState.ulValue, sizeof(uint64_t), 0);
-    for(uint32_t i = 0; i < ptDesc->uBindGroupLayoutCount; i++)
-    {
-        uHash += ptDesc->atBindGroupLayouts[i].uTextureCount;
-        uHash += ptDesc->atBindGroupLayouts[i].uBufferCount;
-    }
-    uHash = pl_str_hash(ptDesc->pcPixelShader, 0, uHash);
-    uHash = pl_str_hash(ptDesc->pcVertexShader, 0, uHash);
-
-    // TODO: set a max shader count & use a lookup table
-    for(uint32_t i = 0; i < pl_sb_size(ptResourceManager->_sbulShaderHashes); i++)
-    {
-        if(ptResourceManager->_sbulShaderHashes[i] == uHash)
-            return i;
-    }
-    
-    plShader tShader = {
-        .tDesc = *ptDesc
-    };
-
-    VkDescriptorSetLayout atDescriptorSetLayouts[4] = {0};
-    for(uint32_t i = 0; i < ptDesc->uBindGroupLayoutCount; i++)
-        atDescriptorSetLayouts[i] = tShader.tDesc.atBindGroupLayouts[i]._tDescriptorSetLayout;
-
-    const VkPipelineLayoutCreateInfo tPipelineLayoutInfo = {
-        .sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = ptDesc->uBindGroupLayoutCount,
-        .pSetLayouts    = atDescriptorSetLayouts
-    };
-    PL_VULKAN(vkCreatePipelineLayout(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, &tPipelineLayoutInfo, NULL, &tShader._tPipelineLayout));
+VkPipeline
+pl__create_shader_pipeline(plResourceManager* ptResourceManager, plGraphicsState tVariant, plVariantInfo* ptInfo)
+{
+    VkPipeline tPipeline = VK_NULL_HANDLE;
 
     //---------------------------------------------------------------------
     // input assembler stage
@@ -510,7 +487,7 @@ pl_create_shader(plResourceManager* ptResourceManager, const plShaderDesc* ptDes
 
     VkVertexInputAttributeDescription* sbtAttributeDescriptions = NULL;
     uint32_t uCurrentInputOffset = 0;
-    if(ptDesc->tGraphicsState.ulVertexStreamMask0 & PL_MESH_FORMAT_FLAG_HAS_POSITION)
+    if(tVariant.ulVertexStreamMask0 & PL_MESH_FORMAT_FLAG_HAS_POSITION)
     {
         const VkVertexInputAttributeDescription tAttributeDescription =
         {
@@ -523,7 +500,7 @@ pl_create_shader(plResourceManager* ptResourceManager, const plShaderDesc* ptDes
         uCurrentInputOffset += sizeof(float) * 3;
     }
 
-    if(ptDesc->tGraphicsState.ulVertexStreamMask0 & PL_MESH_FORMAT_FLAG_HAS_NORMAL)
+    if(tVariant.ulVertexStreamMask0 & PL_MESH_FORMAT_FLAG_HAS_NORMAL)
     {
         const VkVertexInputAttributeDescription tAttributeDescription =
         {
@@ -536,7 +513,7 @@ pl_create_shader(plResourceManager* ptResourceManager, const plShaderDesc* ptDes
         uCurrentInputOffset += sizeof(float) * 3;
     }
 
-    if(ptDesc->tGraphicsState.ulVertexStreamMask0 & PL_MESH_FORMAT_FLAG_HAS_TEXCOORD_0)
+    if(tVariant.ulVertexStreamMask0 & PL_MESH_FORMAT_FLAG_HAS_TEXCOORD_0)
     {
         const VkVertexInputAttributeDescription tAttributeDescription =
         {
@@ -549,7 +526,7 @@ pl_create_shader(plResourceManager* ptResourceManager, const plShaderDesc* ptDes
         uCurrentInputOffset += sizeof(float) * 2;
     }
 
-    if(ptDesc->tGraphicsState.ulVertexStreamMask0 & PL_MESH_FORMAT_FLAG_HAS_COLOR_0)
+    if(tVariant.ulVertexStreamMask0 & PL_MESH_FORMAT_FLAG_HAS_COLOR_0)
     {
         const VkVertexInputAttributeDescription tAttributeDescription =
         {
@@ -562,7 +539,7 @@ pl_create_shader(plResourceManager* ptResourceManager, const plShaderDesc* ptDes
         uCurrentInputOffset += sizeof(float) * 4;
     }
 
-    if(ptDesc->tGraphicsState.ulVertexStreamMask0 & PL_MESH_FORMAT_FLAG_HAS_TEXCOORD_1)
+    if(tVariant.ulVertexStreamMask0 & PL_MESH_FORMAT_FLAG_HAS_TEXCOORD_1)
     {
         const VkVertexInputAttributeDescription tAttributeDescription =
         {
@@ -575,7 +552,7 @@ pl_create_shader(plResourceManager* ptResourceManager, const plShaderDesc* ptDes
         uCurrentInputOffset += sizeof(float) * 2;
     }
 
-    if(ptDesc->tGraphicsState.ulVertexStreamMask0 & PL_MESH_FORMAT_FLAG_HAS_TANGENT)
+    if(tVariant.ulVertexStreamMask0 & PL_MESH_FORMAT_FLAG_HAS_TANGENT)
     {
         const VkVertexInputAttributeDescription tAttributeDescription =
         {
@@ -595,40 +572,6 @@ pl_create_shader(plResourceManager* ptResourceManager, const plShaderDesc* ptDes
         .stride    = uCurrentInputOffset
     };
 
-
-    const VkSpecializationMapEntry tSpecializationEntries[] = 
-    {
-        {
-            .constantID = 0,
-            .offset     = 0,
-            .size       = sizeof(int)
-        },
-        {
-            .constantID = 1,
-            .offset     = sizeof(int),
-            .size       = sizeof(int)
-        }
-    };
-
-    int aiData[2] = {
-        (int)ptDesc->tGraphicsState.ulVertexStreamMask1,
-        0
-    };
-
-    int iFlagCopy = (int)ptDesc->tGraphicsState.ulVertexStreamMask1;
-    while(iFlagCopy)
-    {
-        aiData[1] += iFlagCopy & 1;
-        iFlagCopy >>= 1;
-    }
-
-    VkSpecializationInfo tSpecializationInfo0 = {
-        .mapEntryCount = 2,
-        .pMapEntries   = tSpecializationEntries,
-        .dataSize      = sizeof(int) * 2,
-        .pData         = aiData
-    };
-
     const VkPipelineVertexInputStateCreateInfo tVertexInputInfo = {
         .sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .vertexBindingDescriptionCount   = 1,
@@ -644,20 +587,9 @@ pl_create_shader(plResourceManager* ptResourceManager, const plShaderDesc* ptDes
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         .stage = VK_SHADER_STAGE_VERTEX_BIT,
         .pName = "main",
-        .pSpecializationInfo = &tSpecializationInfo0
+        .pSpecializationInfo = &ptInfo->tSpecializationInfo
     };
-
-    uint32_t uByteCodeSize = 0;
-    pl_read_file(ptDesc->pcVertexShader, &uByteCodeSize, NULL, "rb");
-    char* pcByteCode = pl_alloc(uByteCodeSize);
-    pl_read_file(ptDesc->pcVertexShader, &uByteCodeSize, pcByteCode, "rb");
-
-    const VkShaderModuleCreateInfo tVertexShaderInfo = {
-        .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = uByteCodeSize,
-        .pCode    = (const uint32_t*)(pcByteCode)
-    };
-    PL_VULKAN(vkCreateShaderModule(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, &tVertexShaderInfo, NULL, &tVertexShaderStageInfo.module));
+    PL_VULKAN(vkCreateShaderModule(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, &ptInfo->tVertexShaderInfo, NULL, &tVertexShaderStageInfo.module));
 
     //---------------------------------------------------------------------
     // pixel shader stage
@@ -666,28 +598,16 @@ pl_create_shader(plResourceManager* ptResourceManager, const plShaderDesc* ptDes
     VkPipelineShaderStageCreateInfo tPixelShaderStageInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-        .pName = "main"
+        .pName = "main",
+        .pSpecializationInfo = &ptInfo->tSpecializationInfo
     };
-
-    uByteCodeSize = 0;
-    pl_read_file(ptDesc->pcPixelShader, &uByteCodeSize, NULL, "rb");
-    pl_free(pcByteCode);
-    pcByteCode = pl_alloc(uByteCodeSize);
-    pl_read_file(ptDesc->pcPixelShader, &uByteCodeSize, pcByteCode, "rb");
-
-    const VkShaderModuleCreateInfo tPixelShaderInfo = {
-        .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = uByteCodeSize,
-        .pCode    = (const uint32_t*)(pcByteCode)
-    };
-    PL_VULKAN(vkCreateShaderModule(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, &tPixelShaderInfo, NULL, &tPixelShaderStageInfo.module));
-    pl_free(pcByteCode);
+    PL_VULKAN(vkCreateShaderModule(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, &ptInfo->tPixelShaderInfo, NULL, &tPixelShaderStageInfo.module));
 
     //---------------------------------------------------------------------
     // color blending stage
     //---------------------------------------------------------------------
 
-    const VkPipelineColorBlendAttachmentState tColorBlendAttachment = pl__get_blend_state((plBlendMode)ptDesc->tGraphicsState.ulBlendMode);
+    const VkPipelineColorBlendAttachmentState tColorBlendAttachment = pl__get_blend_state((plBlendMode)tVariant.ulBlendMode);
 
     const VkPipelineColorBlendStateCreateInfo tColorBlending = {
         .sType           = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
@@ -710,9 +630,9 @@ pl_create_shader(plResourceManager* ptResourceManager, const plShaderDesc* ptDes
 
     VkPipelineDepthStencilStateCreateInfo tDepthStencil = {
         .sType                 = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-        .depthTestEnable       = ptDesc->tGraphicsState.ulDepthMode != VK_COMPARE_OP_ALWAYS ? VK_TRUE : VK_FALSE,
-        .depthWriteEnable      = ptDesc->tGraphicsState.ulDepthWriteEnabled ? VK_TRUE : VK_FALSE,
-        .depthCompareOp        = ptDesc->tGraphicsState.ulDepthMode,
+        .depthTestEnable       = tVariant.ulDepthMode != VK_COMPARE_OP_ALWAYS ? VK_TRUE : VK_FALSE,
+        .depthWriteEnable      = tVariant.ulDepthWriteEnabled ? VK_TRUE : VK_FALSE,
+        .depthCompareOp        = tVariant.ulDepthMode,
         .depthBoundsTestEnable = VK_FALSE,
         .maxDepthBounds        = 1.0f,
         .stencilTestEnable     = VK_FALSE
@@ -740,7 +660,7 @@ pl_create_shader(plResourceManager* ptResourceManager, const plShaderDesc* ptDes
         .rasterizerDiscardEnable = VK_FALSE,
         .polygonMode             = VK_POLYGON_MODE_FILL,
         .lineWidth               = 1.0f,
-        .cullMode                = (int)ptDesc->tGraphicsState.ulCullMode,
+        .cullMode                = (int)tVariant.ulCullMode,
         .frontFace               = VK_FRONT_FACE_COUNTER_CLOCKWISE, // VK_FRONT_FACE_CLOCKWISE
         .depthBiasEnable         = VK_FALSE
     };
@@ -775,17 +695,149 @@ pl_create_shader(plResourceManager* ptResourceManager, const plShaderDesc* ptDes
         .pMultisampleState   = &tMultisampling,
         .pColorBlendState    = &tColorBlending,
         .pDynamicState       = &tDynamicState,
-        .layout              = tShader._tPipelineLayout,
-        .renderPass          = ptDesc->_tRenderPass,
+        .layout              = ptInfo->tPipelineLayout,
+        .renderPass          = ptInfo->tRenderPass,
         .subpass             = 0u,
         .basePipelineHandle  = VK_NULL_HANDLE,
         .pDepthStencilState  = &tDepthStencil,
     };
-    PL_VULKAN(vkCreateGraphicsPipelines(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, VK_NULL_HANDLE, 1, &tPipelineInfo, NULL, &tShader._tPipeline));
+    PL_VULKAN(vkCreateGraphicsPipelines(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, VK_NULL_HANDLE, 1, &tPipelineInfo, NULL, &tPipeline));
 
-    // no longer need these
     vkDestroyShaderModule(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, tVertexShaderStageInfo.module, NULL);
     vkDestroyShaderModule(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, tPixelShaderStageInfo.module, NULL);
+    pl_sb_free(sbtAttributeDescriptions);
+    return tPipeline;
+}
+
+uint32_t
+pl_create_shader(plResourceManager* ptResourceManager, const plShaderDesc* ptDesc)
+{
+    PL_ASSERT(ptDesc->uBindGroupLayoutCount < 5 && "only 4 descriptor sets allowed per pipeline.");
+    if(pl_sb_size(ptDesc->sbtVariants) > 0)
+    {
+        if(ptDesc->sbtVariants[0].ulValue != ptDesc->tGraphicsState.ulValue)
+            pl_sb_insert(ptDesc->sbtVariants, 0, ptDesc->tGraphicsState);
+    }
+    else
+    {
+        pl_sb_push(ptDesc->sbtVariants, ptDesc->tGraphicsState);
+    }
+
+    // hash shader
+    uint32_t uHash = pl_str_hash_data(&ptDesc->tGraphicsState.ulValue, sizeof(uint64_t), 0);
+    const uint32_t uVariantCount = pl_sb_size(ptDesc->sbtVariants);
+    uHash = pl_str_hash_data(&uVariantCount, sizeof(uint32_t), uHash);
+    for(uint32_t i = 0; i < ptDesc->uBindGroupLayoutCount; i++)
+    {
+        uHash += ptDesc->atBindGroupLayouts[i].uTextureCount;
+        uHash += ptDesc->atBindGroupLayouts[i].uBufferCount;
+    }
+    uHash = pl_str_hash(ptDesc->pcPixelShader, 0, uHash);
+    uHash = pl_str_hash(ptDesc->pcVertexShader, 0, uHash);
+
+    // TODO: set a max shader count & use a lookup table
+    for(uint32_t i = 0; i < pl_sb_size(ptResourceManager->_sbulShaderHashes); i++)
+    {
+        if(ptResourceManager->_sbulShaderHashes[i] == uHash)
+            return i;
+    }
+    
+    plShader tShader = {
+        .tDesc = *ptDesc
+    };
+
+    VkDescriptorSetLayout atDescriptorSetLayouts[4] = {0};
+    for(uint32_t i = 0; i < ptDesc->uBindGroupLayoutCount; i++)
+        atDescriptorSetLayouts[i] = tShader.tDesc.atBindGroupLayouts[i]._tDescriptorSetLayout;
+
+    const VkPipelineLayoutCreateInfo tPipelineLayoutInfo = {
+        .sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = ptDesc->uBindGroupLayoutCount,
+        .pSetLayouts    = atDescriptorSetLayouts
+    };
+    PL_VULKAN(vkCreatePipelineLayout(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, &tPipelineLayoutInfo, NULL, &tShader._tPipelineLayout));
+
+    //---------------------------------------------------------------------
+    // vertex shader stage
+    //---------------------------------------------------------------------
+
+    uint32_t uVertexByteCodeSize = 0;
+    pl_read_file(ptDesc->pcVertexShader, &uVertexByteCodeSize, NULL, "rb");
+    char* pcVertexByteCode = pl_alloc(uVertexByteCodeSize);
+    pl_read_file(ptDesc->pcVertexShader, &uVertexByteCodeSize, pcVertexByteCode, "rb");
+
+    tShader.tVertexShaderInfo = (VkShaderModuleCreateInfo){
+        .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = uVertexByteCodeSize,
+        .pCode    = (const uint32_t*)(pcVertexByteCode)
+    };
+
+    //---------------------------------------------------------------------
+    // pixel shader stage
+    //---------------------------------------------------------------------
+
+    uint32_t uByteCodeSize = 0;
+    pl_read_file(ptDesc->pcPixelShader, &uByteCodeSize, NULL, "rb");
+    char* pcByteCode = pl_alloc(uByteCodeSize);
+    pl_read_file(ptDesc->pcPixelShader, &uByteCodeSize, pcByteCode, "rb");
+
+    tShader.tPixelShaderInfo = (VkShaderModuleCreateInfo){
+        .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = uByteCodeSize,
+        .pCode    = (const uint32_t*)(pcByteCode)
+    };
+
+    const VkSpecializationMapEntry tSpecializationEntries[] = 
+    {
+        {
+            .constantID = 0,
+            .offset     = 0,
+            .size       = sizeof(int)
+        },
+        {
+            .constantID = 1,
+            .offset     = sizeof(int),
+            .size       = sizeof(int)
+        },
+        {
+            .constantID = 2,
+            .offset     = sizeof(int) * 2,
+            .size       = sizeof(int)
+        },
+
+    };
+
+    // create pipelines for variants
+    for(uint32_t i = 0; i < pl_sb_size(tShader.tDesc.sbtVariants); i++)
+    {
+
+        int aiData[3] = {
+            (int)tShader.tDesc.sbtVariants[i].ulVertexStreamMask1,
+            0,
+            (int)tShader.tDesc.sbtVariants[i].ulShaderTextureFlags
+        };
+
+        int iFlagCopy = (int)tShader.tDesc.sbtVariants[i].ulVertexStreamMask1;
+        while(iFlagCopy)
+        {
+            aiData[1] += iFlagCopy & 1;
+            iFlagCopy >>= 1;
+        }
+
+        plVariantInfo tVariantInfo = {
+            .tRenderPass         = tShader.tDesc._tRenderPass,
+            .tPipelineLayout     = tShader._tPipelineLayout,
+            .tPixelShaderInfo    = tShader.tPixelShaderInfo,
+            .tVertexShaderInfo   = tShader.tVertexShaderInfo,
+            .tSpecializationInfo = {
+                .mapEntryCount = 3,
+                .pMapEntries   = tSpecializationEntries,
+                .dataSize      = sizeof(int) * 3,
+                .pData         = aiData
+            }
+        };
+        pl_sb_push(tShader._sbtVariantPipelines, pl__create_shader_pipeline(ptResourceManager, tShader.tDesc.sbtVariants[i], &tVariantInfo));
+    }
 
     // find free index
     uint32_t uShaderIndex = 0u;
@@ -798,9 +850,71 @@ pl_create_shader(plResourceManager* ptResourceManager, const plShaderDesc* ptDes
     ptResourceManager->_sbulShaderHashes[uShaderIndex] = uHash;
 
     PL_ASSERT(pl_sb_size(ptResourceManager->sbtShaders) == pl_sb_size(ptResourceManager->_sbulShaderHashes));
-    pl_sb_free(sbtAttributeDescriptions);
-
+    
     return uShaderIndex;
+}
+
+void
+pl_add_shader_variant(plResourceManager* ptResourceManager, uint32_t uShader, plGraphicsState tVariant)
+{
+    plShader* ptShader = &ptResourceManager->sbtShaders[uShader];
+
+    // check if variant exist already
+    for(uint32_t i = 0; i < pl_sb_size(ptShader->tDesc.sbtVariants); i++)
+    {
+        if(ptShader->tDesc.sbtVariants[i].ulValue == tVariant.ulValue)
+            return;
+    }
+
+    pl_sb_push(ptShader->tDesc.sbtVariants, tVariant);
+
+    const VkSpecializationMapEntry tSpecializationEntries[] = 
+    {
+        {
+            .constantID = 0,
+            .offset     = 0,
+            .size       = sizeof(int)
+        },
+        {
+            .constantID = 1,
+            .offset     = sizeof(int),
+            .size       = sizeof(int)
+        },
+        {
+            .constantID = 2,
+            .offset     = sizeof(int) * 2,
+            .size       = sizeof(int)
+        },
+
+    };
+
+    // create pipeline for variant
+    int aiData[3] = {
+        (int)tVariant.ulVertexStreamMask1,
+        0,
+        (int)tVariant.ulShaderTextureFlags
+    };
+
+    int iFlagCopy = (int)tVariant.ulVertexStreamMask1;
+    while(iFlagCopy)
+    {
+        aiData[1] += iFlagCopy & 1;
+        iFlagCopy >>= 1;
+    }
+
+    plVariantInfo tVariantInfo = {
+        .tRenderPass         = ptShader->tDesc._tRenderPass,
+        .tPipelineLayout     = ptShader->_tPipelineLayout,
+        .tPixelShaderInfo    = ptShader->tPixelShaderInfo,
+        .tVertexShaderInfo   = ptShader->tVertexShaderInfo,
+        .tSpecializationInfo = {
+            .mapEntryCount = 3,
+            .pMapEntries   = tSpecializationEntries,
+            .dataSize      = sizeof(int) * 3,
+            .pData         = aiData
+        }
+    };
+    pl_sb_push(ptShader->_sbtVariantPipelines, pl__create_shader_pipeline(ptResourceManager, tVariant, &tVariantInfo));
 }
 
 void
@@ -812,6 +926,14 @@ pl_submit_shader_for_deletion(plResourceManager* ptResourceManager, uint32_t uSh
 
     // using shader hash to store frame this buffer is ok to free
     ptResourceManager->_sbulShaderHashes[uShaderIndex] = ptResourceManager->_ptGraphics->uFramesInFlight;   
+}
+
+plBindGroupLayout*
+pl_get_bind_group_layout(plResourceManager* ptResourceManager, uint32_t uShaderIndex, uint32_t uBindGroupIndex)
+{
+    PL_ASSERT(uShaderIndex < pl_sb_size(ptResourceManager->sbtShaders)); 
+    PL_ASSERT(uBindGroupIndex < ptResourceManager->sbtShaders[uShaderIndex].tDesc.uBindGroupLayoutCount); 
+    return &ptResourceManager->sbtShaders[uShaderIndex].tDesc.atBindGroupLayouts[uBindGroupIndex];
 }
 
 void
@@ -911,6 +1033,7 @@ pl_draw_areas(plGraphics* ptGraphics, uint32_t uAreaCount, plDrawArea* atAreas, 
     VkDescriptorSet tLastGlobalDescriptorSet = VK_NULL_HANDLE;
     VkDescriptorSet tLastMaterialDescriptorSet = VK_NULL_HANDLE;
     uint32_t uLastShader = UINT32_MAX;
+    uint32_t uLastVariant = UINT32_MAX;
 
     for(uint32_t i = 0; i < uAreaCount; i++)
     {
@@ -935,10 +1058,12 @@ pl_draw_areas(plGraphics* ptGraphics, uint32_t uAreaCount, plDrawArea* atAreas, 
             
             vkCmdBindDescriptorSets(ptCurrentFrame->tCmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, ptShader->_tPipelineLayout, 2, 1, &ptDraw->ptBindGroup2->_tDescriptorSet, 1, &ptDraw->uDynamicBufferOffset2);
         
-            if(ptDraw->uShader != uLastShader)
+            if(ptDraw->uShader != uLastShader || ptDraw->uShaderVariant != uLastVariant)
             {
-                vkCmdBindPipeline(ptCurrentFrame->tCmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, ptShader->_tPipeline);
+                VkPipeline tPipeline = ptShader->_sbtVariantPipelines[ptDraw->uShaderVariant];
+                vkCmdBindPipeline(ptCurrentFrame->tCmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, tPipeline);
                 uLastShader = ptDraw->uShader;
+                uLastVariant = ptDraw->uShaderVariant;
             }
             
             vkCmdBindIndexBuffer(ptCurrentFrame->tCmdBuf, ptGraphics->tResourceManager.sbtBuffers[ptDraw->ptMesh->uIndexBuffer].tBuffer, 0, VK_INDEX_TYPE_UINT32);
@@ -1075,9 +1200,15 @@ pl_process_cleanup_queue(plResourceManager* ptResourceManager, uint32_t uFramesT
         if(ptResourceManager->_sbulShaderHashes[uShaderIndex] == 0)
         {
 
+            pl_free((uint32_t*)ptShader->tPixelShaderInfo.pCode);
+            pl_free((uint32_t*)ptShader->tVertexShaderInfo.pCode);
             vkDestroyPipelineLayout(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, ptShader->_tPipelineLayout, NULL);
-            vkDestroyPipeline(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, ptShader->_tPipeline, NULL);
 
+            for(uint32_t uVariantIndex = 0; uVariantIndex < pl_sb_size(ptShader->_sbtVariantPipelines); uVariantIndex++)
+                vkDestroyPipeline(ptResourceManager->_ptGraphics->tDevice.tLogicalDevice, ptShader->_sbtVariantPipelines[uVariantIndex], NULL);
+            ptShader->_tPipelineLayout = VK_NULL_HANDLE;
+            pl_sb_free(ptShader->_sbtVariantPipelines);
+            ptShader->_sbtVariantPipelines = NULL;
             // add to free indices
             pl_sb_push(ptResourceManager->_sbulShaderFreeIndices, uShaderIndex);
             bNeedUpdate = true;

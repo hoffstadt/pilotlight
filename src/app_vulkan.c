@@ -6,11 +6,12 @@
 Index of this file:
 // [SECTION] includes
 // [SECTION] structs
+// [SECTION] helpers
 // [SECTION] pl_app_load
-// [SECTION] pl_app_setup
 // [SECTION] pl_app_shutdown
 // [SECTION] pl_app_resize
 // [SECTION] pl_app_update
+// [SECTION] helper implementations
 */
 
 //-----------------------------------------------------------------------------
@@ -35,7 +36,8 @@ Index of this file:
 
 // extensions
 #include "pl_draw_extension.h"
-#include "pl_stl_ext.h"
+#include "pl_gltf_extension.h"
+#include "pl_stl_extension.h"
 #include "stb_image.h"
 
 //-----------------------------------------------------------------------------
@@ -67,24 +69,35 @@ typedef struct _plAppData
 
     // materials
     uint32_t uGrassMaterial;
-    uint32_t uStlMaterial;
+    uint32_t uSolidMaterial;
+
+    // gltf
+    plGltf          tGltf;
+
+    // testing
+    uint32_t*       sbuMaterialIndices;
+    plBindGroup*    sbtBindGroups;
+    uint32_t        uConstantBuffer; 
 
     // stl
     plBindGroup     tStlBindGroup2;
     plMesh          tStlMesh;
-    plDraw          tStlDraw;
     uint32_t        uStlConstantBuffer;
 
     // grass
     uint32_t        uGrassTexture;
     plBindGroup     tGrassBindGroup2;
     plMesh          tGrassMesh;
-    plDraw          tGrassDraw;
     uint32_t        uGrassConstantBuffer;
 
 } plAppData;
 
-void pl_load_grass(plAppData* ptData, uint32_t uRows, uint32_t uColumns, float fSpacing);
+//-----------------------------------------------------------------------------
+// [SECTION] helpers
+//-----------------------------------------------------------------------------
+
+void     pl_load_grass(plAppData* ptData, uint32_t uRows, uint32_t uColumns, float fSpacing);
+uint32_t pl_load_shader(plAppData* ptAppData);
 
 //-----------------------------------------------------------------------------
 // [SECTION] pl_app_load
@@ -93,6 +106,7 @@ void pl_load_grass(plAppData* ptData, uint32_t uRows, uint32_t uColumns, float f
 PL_EXPORT void*
 pl_app_load(plIOContext* ptIOCtx, plAppData* ptAppData)
 {
+
     if(ptAppData) // reload
     {
         pl_set_log_context(&ptAppData->tLogCtx);
@@ -108,46 +122,36 @@ pl_app_load(plIOContext* ptIOCtx, plAppData* ptAppData)
         return ptAppData;
     }
 
-    plAppData* tPNewData = malloc(sizeof(plAppData));
-    memset(tPNewData, 0, sizeof(plAppData));
+    ptAppData = malloc(sizeof(plAppData));
+    memset(ptAppData, 0, sizeof(plAppData));
 
+    // set contexts
     pl_set_io_context(ptIOCtx);
-    pl_initialize_memory_context(&tPNewData->tMemoryCtx);
-    pl_initialize_profile_context(&tPNewData->tProfileCtx);
-    pl_initialize_data_registry(&tPNewData->tDataRegistryCtx);
+    pl_initialize_memory_context(&ptAppData->tMemoryCtx);
+    pl_initialize_profile_context(&ptAppData->tProfileCtx);
+    pl_initialize_data_registry(&ptAppData->tDataRegistryCtx);
 
     // setup logging
-    pl_initialize_log_context(&tPNewData->tLogCtx);
+    pl_initialize_log_context(&ptAppData->tLogCtx);
     pl_add_log_channel("Default", PL_CHANNEL_TYPE_CONSOLE);
     pl_log_info(0, "Setup logging");
 
     // setup extension registry
-    pl_initialize_extension_registry(&tPNewData->tExtensionRegistryCtx);
-    pl_register_data("memory", &tPNewData->tMemoryCtx);
-    pl_register_data("profile", &tPNewData->tProfileCtx);
-    pl_register_data("log", &tPNewData->tLogCtx);
+    pl_initialize_extension_registry(&ptAppData->tExtensionRegistryCtx);
+    pl_register_data("memory", &ptAppData->tMemoryCtx);
+    pl_register_data("profile", &ptAppData->tProfileCtx);
+    pl_register_data("log", &ptAppData->tLogCtx);
     pl_register_data("io", ptIOCtx);
-    pl_register_data("draw", &tPNewData->tCtx);
+    pl_register_data("draw", &ptAppData->tCtx);
 
+    // load extensions
     plExtension tExtension = {0};
     pl_get_draw_extension_info(&tExtension);
     pl_load_extension(&tExtension);
 
+    // load extension apis
     plExtension* ptExtension = pl_get_extension(PL_EXT_DRAW);
-    tPNewData->ptDrawExtApi = pl_get_api(ptExtension, PL_EXT_API_DRAW);
-
-    return tPNewData;
-}
-
-//-----------------------------------------------------------------------------
-// [SECTION] pl_app_setup
-//-----------------------------------------------------------------------------
-
-PL_EXPORT void
-pl_app_setup(plAppData* ptAppData)
-{
-    // get io context
-    plIOContext* ptIOCtx = pl_get_io_context();
+    ptAppData->ptDrawExtApi = pl_get_api(ptExtension, PL_EXT_API_DRAW);
 
     // setup renderer
     pl_setup_graphics(&ptAppData->tGraphics);
@@ -175,8 +179,47 @@ pl_app_setup(plAppData* ptAppData)
     // camera
     ptAppData->tCamera = pl_create_perspective_camera((plVec3){0.0f, 2.0f, 8.5f}, PL_PI_3, ptIOCtx->afMainViewportSize[0] / ptIOCtx->afMainViewportSize[1], 0.01f, 400.0f);
 
+    // create shader
+    const uint32_t uShader = pl_load_shader(ptAppData);
+
+    // load gltf meshes
+    pl_ext_load_gltf(&ptAppData->tRenderer, "../data/glTF-Sample-Models-master/2.0/Sponza/glTF/Sponza.gltf", &ptAppData->tGltf);
+    pl_sb_reserve(ptAppData->sbtBindGroups, pl_sb_size(ptAppData->tGltf.sbtMeshes));
+    pl_sb_reserve(ptAppData->sbuMaterialIndices, pl_sb_size(ptAppData->tGltf.sbtMeshes));
+
+    ptAppData->uConstantBuffer = pl_create_constant_buffer(&ptAppData->tGraphics.tResourceManager, sizeof(plObjectInfo), ptAppData->tGraphics.uFramesInFlight * pl_sb_size(ptAppData->tGltf.sbtMeshes));
+    plBindGroupLayout tGroupLayout0 = {
+        .uBufferCount = 1,
+        .aBuffers      = {
+            { .tType = PL_BUFFER_BINDING_TYPE_UNIFORM, .uSlot = 0, .tStageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT}  
+        }
+    };
+    for(uint32_t i = 0; i < pl_sb_size(ptAppData->tGltf.sbtMeshes); i++)
+    {
+        pl_sb_push(ptAppData->sbtBindGroups, (plBindGroup){0});
+        pl_create_bind_group(&ptAppData->tGraphics, &tGroupLayout0, &pl_sb_last(ptAppData->sbtBindGroups), "gltf");
+        pl_update_bind_group(&ptAppData->tGraphics, &pl_sb_last(ptAppData->sbtBindGroups), 1, &ptAppData->uConstantBuffer, 0, NULL);
+    }
+
+    // const plMat4 tGltfRotation = pl_identity_mat4();
+    // const plMat4 tGltfRotation = pl_mat4_rotate_xyz(PL_PI_2, 1.0f, 0.0f, 0.0f);
+    const plMat4 tGltfRotation = pl_mat4_scale_xyz(0.008f, 0.008f, 0.008f);
+    // const plMat4 tGltfTranslation = pl_mat4_translate_xyz(3.0f, 2.0f, 0.0f);
+    const plMat4 tGltfTranslation = pl_identity_mat4();
+    for(uint32_t j = 0; j < ptAppData->tGraphics.uFramesInFlight; j++)
+    {
+
+        for(uint32_t i = 0; i < pl_sb_size(ptAppData->tGltf.sbtMeshes); i++)
+        {
+
+            plObjectInfo* ptObjectInfo = pl_get_constant_buffer_data_ex(&ptAppData->tGraphics.tResourceManager, ptAppData->uConstantBuffer, (size_t)j, i);
+            ptObjectInfo->tModel = pl_mul_mat4(&tGltfTranslation, &tGltfRotation);
+            ptObjectInfo->uVertexOffset = ptAppData->tGltf.sbuVertexOffsets[i];
+      }
+    }
+
     // load grass
-    pl_load_grass(ptAppData, 50, 50, 0.25f);
+    pl_load_grass(ptAppData, 150, 150, 0.25f);
    
     // load stl
     const plStlOptions tStlOptions = {
@@ -211,32 +254,21 @@ pl_app_setup(plAppData* ptAppData)
     
     // create bind group layouts
     plBindGroupLayout tStlGroupLayout = {
-
         .uBufferCount = 1,
         .aBuffers      = {
-            {
-                .tType       = PL_BUFFER_BINDING_TYPE_UNIFORM,
-                .uSlot       = 0,
-                .tStageFlags = VK_SHADER_STAGE_VERTEX_BIT
-            }
-        },
-
-        .uTextureCount = 1,
-        .aTextures     = {
-            {
-                .tType       = PL_TEXTURE_BINDING_TYPE_SAMPLED,
-                .uSlot       = 1,
-                .tStageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-            }  
+             { .tType = PL_BUFFER_BINDING_TYPE_UNIFORM, .uSlot = 0, .tStageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT}  
         }
     };
 
     pl_create_bind_group(&ptAppData->tGraphics, &tStlGroupLayout, &ptAppData->tStlBindGroup2, "stl bind group");
-    pl_update_bind_group(&ptAppData->tGraphics, &ptAppData->tStlBindGroup2, 1, &ptAppData->uStlConstantBuffer, 1, &ptAppData->uGrassTexture);
+    pl_update_bind_group(&ptAppData->tGraphics, &ptAppData->tStlBindGroup2, 1, &ptAppData->uStlConstantBuffer, 0, NULL);
     ptAppData->tStlMesh.uIndexCount   = (uint32_t)tStlInfo.szIndexBufferSize;
     ptAppData->tStlMesh.uVertexCount  = (uint32_t)tStlInfo.szVertexStream0Size / 3;
     ptAppData->tStlMesh.uIndexBuffer  = pl_create_index_buffer(&ptAppData->tGraphics.tResourceManager, sizeof(uint32_t) * tStlInfo.szIndexBufferSize, auIndexBuffer);
     ptAppData->tStlMesh.uVertexBuffer = pl_create_vertex_buffer(&ptAppData->tGraphics.tResourceManager, tStlInfo.szVertexStream0Size * sizeof(float), sizeof(plVec3), afVertexBuffer0);
+    ptAppData->tStlMesh.ulVertexStreamMask0 = PL_MESH_FORMAT_FLAG_HAS_POSITION;
+    ptAppData->tStlMesh.ulVertexStreamMask1 = PL_MESH_FORMAT_FLAG_HAS_NORMAL | PL_MESH_FORMAT_FLAG_HAS_COLOR_0;
+
     const uint32_t uPrevIndex = pl_sb_add_n(ptAppData->tRenderer.sbfStorageBuffer, (uint32_t)tStlInfo.szVertexStream1Size);
     memcpy(&ptAppData->tRenderer.sbfStorageBuffer[uPrevIndex], afVertexBuffer1, tStlInfo.szVertexStream1Size * sizeof(float));
     pl_free(acFileData);
@@ -245,24 +277,36 @@ pl_app_setup(plAppData* ptAppData)
     pl_free(auIndexBuffer);
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~materials~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    
-    // grass material
-    ptAppData->uGrassMaterial = pl_create_material(&ptAppData->tAssetRegistry, "grass");
-    plMaterial* ptGrassMaterial = &ptAppData->tAssetRegistry.sbtMaterials[ptAppData->uGrassMaterial];
-    ptGrassMaterial->bDoubleSided = true;
-    ptGrassMaterial->uAlbedoMap = ptAppData->uGrassTexture;
-    ptGrassMaterial->ulVertexStreamMask0 = PL_MESH_FORMAT_FLAG_HAS_POSITION;
-    ptGrassMaterial->ulVertexStreamMask1 = PL_MESH_FORMAT_FLAG_HAS_NORMAL | PL_MESH_FORMAT_FLAG_HAS_TEXCOORD_0;
 
-    // stl material
-    ptAppData->uStlMaterial = pl_create_material(&ptAppData->tAssetRegistry, "stl");
-    plMaterial* ptStlMaterial = &ptAppData->tAssetRegistry.sbtMaterials[ptAppData->uStlMaterial];
-    ptStlMaterial->ulVertexStreamMask0 = PL_MESH_FORMAT_FLAG_HAS_POSITION;
-    ptStlMaterial->ulVertexStreamMask1 = PL_MESH_FORMAT_FLAG_HAS_NORMAL | PL_MESH_FORMAT_FLAG_HAS_COLOR_0;
+    // create gltf materials
+    for(uint32_t i = 0; i < pl_sb_size(ptAppData->tGltf.sbtMaterials); i++)
+    {
+        ptAppData->tGltf.sbtMaterials[i].uShader = uShader;
+        pl_sb_push(ptAppData->sbuMaterialIndices, pl_create_material(ptAppData->tRenderer.ptAssetRegistry, &ptAppData->tGltf.sbtMaterials[i]));
+    }
 
-    // finalize
-    pl_finalize_material(&ptAppData->tRenderer, ptAppData->uGrassMaterial);
-    pl_finalize_material(&ptAppData->tRenderer, ptAppData->uStlMaterial);
+    // update gltf material indices
+    const uint32_t uGltfMaterialOffset = ptAppData->sbuMaterialIndices[0];
+    for(uint32_t i = 0; i < pl_sb_size(ptAppData->tGltf.sbuMaterialIndices); i++)
+        ptAppData->tGltf.sbuMaterialIndices[i] += uGltfMaterialOffset;
+
+
+    // create material for grass
+    plMaterial tGrassMaterial = {0};
+    pl_initialize_material(&tGrassMaterial, "grass");
+    tGrassMaterial.bDoubleSided = true;
+    tGrassMaterial.uAlbedoMap = ptAppData->uGrassTexture;
+    tGrassMaterial.ulShaderTextureFlags = PL_SHADER_TEXTURE_FLAG_BINDING_0;
+    tGrassMaterial.uShader = uShader;
+    ptAppData->uGrassMaterial = pl_create_material(&ptAppData->tAssetRegistry, &tGrassMaterial);
+
+    plMaterial tSolidMaterial = {0};
+    pl_initialize_material(&tSolidMaterial, "solid");
+    tSolidMaterial.bDoubleSided = true;
+    tSolidMaterial.uShader = uShader;
+    ptAppData->uSolidMaterial = pl_create_material(&ptAppData->tAssetRegistry, &tSolidMaterial);
+
+    return ptAppData;
 }
 
 //-----------------------------------------------------------------------------
@@ -343,7 +387,7 @@ pl_app_update(plAppData* ptAppData)
 
         // update global constant buffer
         plGlobalInfo* ptGlobalInfo = pl_get_constant_buffer_data(&ptAppData->tGraphics.tResourceManager, ptAppData->tRenderer.uGlobalConstantBuffer, 0);
-        ptGlobalInfo->tAmbientColor   = (plVec4){0.1f, 0.0f, 0.0f, 1.0f};
+        ptGlobalInfo->tAmbientColor   = (plVec4){0.0f, 0.0f, 0.0f, 1.0f};
         ptGlobalInfo->tCameraPos      = (plVec4){.xyz = ptAppData->tCamera.tPos, .w = 0.0f};
         ptGlobalInfo->tCameraView     = ptAppData->tCamera.tViewMat;
         ptGlobalInfo->tCameraViewProj = pl_mul_mat4(&ptAppData->tCamera.tProjMat, &ptAppData->tCamera.tViewMat);
@@ -352,8 +396,11 @@ pl_app_update(plAppData* ptAppData)
 
         const uint32_t uDrawOffset = pl_sb_size(ptAppData->tRenderer.sbtDraws);
 
+        const uint32_t uVariantCount = pl_sb_size(ptAppData->tGraphics.tResourceManager.sbtShaders[0].tDesc.sbtVariants);
+
         pl_renderer_submit_meshes(&ptAppData->tRenderer, &ptAppData->tGrassMesh, &ptAppData->uGrassMaterial, &ptAppData->tGrassBindGroup2, ptAppData->uGrassConstantBuffer, 1);
-        pl_renderer_submit_meshes(&ptAppData->tRenderer, &ptAppData->tStlMesh, &ptAppData->uStlMaterial, &ptAppData->tStlBindGroup2, ptAppData->uStlConstantBuffer, 1);
+        pl_renderer_submit_meshes(&ptAppData->tRenderer, &ptAppData->tStlMesh, &ptAppData->uSolidMaterial, &ptAppData->tStlBindGroup2, ptAppData->uStlConstantBuffer, 1);
+        pl_renderer_submit_meshes(&ptAppData->tRenderer, ptAppData->tGltf.sbtMeshes, ptAppData->tGltf.sbuMaterialIndices, ptAppData->sbtBindGroups, ptAppData->uConstantBuffer, pl_sb_size(ptAppData->tGltf.sbtMeshes));
 
         pl_sb_push(ptAppData->tRenderer.sbtDrawAreas, ((plDrawArea){
             .ptBindGroup0 = &ptAppData->tRenderer.tGlobalBindGroup,
@@ -405,10 +452,9 @@ pl_app_update(plAppData* ptAppData)
                     {
                         pl_ui_text("Double Sided: %s", ptMaterial->bDoubleSided ? "true" : "false");
                         pl_ui_text("Alpha cutoff: %0.1f", ptMaterial->fAlphaCutoff);
-                        ptMaterial->uShader      == UINT32_MAX ? pl_ui_text("Shader: None")       : pl_ui_text("Shader: %u", ptMaterial->uShader);
-                        ptMaterial->uAlbedoMap   == UINT32_MAX ? pl_ui_text("Albedo Map: None")   : pl_ui_text("Albedo Map: %u", ptMaterial->uAlbedoMap);
-                        ptMaterial->uNormalMap   == UINT32_MAX ? pl_ui_text("Normal Map: None")   : pl_ui_text("Normal Map: %u", ptMaterial->uNormalMap);
-                        ptMaterial->uSpecularMap == UINT32_MAX ? pl_ui_text("Specular Map: None") : pl_ui_text("Specular Map: %u", ptMaterial->uSpecularMap);
+                        ptMaterial->uShader      == 0 ? pl_ui_text("Shader: None")       : pl_ui_text("Shader: %u", ptMaterial->uShader);
+                        ptMaterial->uAlbedoMap   == 0 ? pl_ui_text("Albedo Map: None")   : pl_ui_text("Albedo Map: %u", ptMaterial->uAlbedoMap);
+                        ptMaterial->uNormalMap   == 0 ? pl_ui_text("Normal Map: None")   : pl_ui_text("Normal Map: %u", ptMaterial->uNormalMap);
                         pl_ui_tree_pop();
                     }
                 }
@@ -454,7 +500,62 @@ pl_app_update(plAppData* ptAppData)
     pl_end_profile_frame();
 }
 
+//-----------------------------------------------------------------------------
+// [SECTION] helper implementations
+//-----------------------------------------------------------------------------
+
 static inline float frandom(float fMax){ return (float)rand()/(float)(RAND_MAX/fMax);}
+
+uint32_t
+pl_load_shader(plAppData* ptAppData)
+{
+    plShaderDesc tShaderDesc = {
+        ._tRenderPass                        = ptAppData->tGraphics.tRenderPass,
+        .pcPixelShader                       = "phong.frag.spv",
+        .pcVertexShader                      = "primitive.vert.spv",
+        .tGraphicsState.ulVertexStreamMask0  = PL_MESH_FORMAT_FLAG_HAS_POSITION,
+        .tGraphicsState.ulVertexStreamMask1  = PL_MESH_FORMAT_FLAG_HAS_NORMAL | PL_MESH_FORMAT_FLAG_HAS_TEXCOORD_0,
+        .tGraphicsState.ulDepthMode          = PL_DEPTH_MODE_LESS,
+        .tGraphicsState.ulBlendMode          = PL_BLEND_MODE_ALPHA,
+        .tGraphicsState.ulCullMode           = VK_CULL_MODE_NONE,
+        .tGraphicsState.ulDepthWriteEnabled  = VK_TRUE,
+        .tGraphicsState.ulShaderTextureFlags = PL_SHADER_TEXTURE_FLAG_BINDING_0,
+        .uBindGroupLayoutCount               = 3,
+        .atBindGroupLayouts                  = {
+            {
+                .uBufferCount = 2,
+                .aBuffers = {
+                    { .tType = PL_BUFFER_BINDING_TYPE_UNIFORM, .uSlot = 0, .tStageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
+                    { .tType = PL_BUFFER_BINDING_TYPE_STORAGE, .uSlot = 1, .tStageFlags = VK_SHADER_STAGE_VERTEX_BIT }
+                },
+            },
+            {
+                .uBufferCount = 1,
+                .aBuffers      = {
+                    { .tType = PL_BUFFER_BINDING_TYPE_UNIFORM, .uSlot = 0, .tStageFlags = VK_SHADER_STAGE_FRAGMENT_BIT }
+                },
+                .uTextureCount = 3,
+                .aTextures     = {
+                    { .tType = PL_TEXTURE_BINDING_TYPE_SAMPLED, .uSlot = 1, .tStageFlags = VK_SHADER_STAGE_FRAGMENT_BIT },
+                    { .tType = PL_TEXTURE_BINDING_TYPE_SAMPLED, .uSlot = 2, .tStageFlags = VK_SHADER_STAGE_FRAGMENT_BIT },
+                    { .tType = PL_TEXTURE_BINDING_TYPE_SAMPLED, .uSlot = 3, .tStageFlags = VK_SHADER_STAGE_FRAGMENT_BIT },
+                }
+            },
+            {
+                .uBufferCount  = 1,
+                .aBuffers      = {
+                    { .tType = PL_BUFFER_BINDING_TYPE_UNIFORM, .uSlot = 0, .tStageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT}
+                }
+            }
+        },   
+    };
+
+    pl_create_bind_group(&ptAppData->tGraphics, &tShaderDesc.atBindGroupLayouts[0], NULL, "nullg material");
+    pl_create_bind_group(&ptAppData->tGraphics, &tShaderDesc.atBindGroupLayouts[1], NULL, "main shader");
+    pl_create_bind_group(&ptAppData->tGraphics, &tShaderDesc.atBindGroupLayouts[2], NULL, "null material");
+
+    return pl_create_shader(&ptAppData->tGraphics.tResourceManager, &tShaderDesc);
+}
 
 void
 pl_load_grass(plAppData* ptData, uint32_t uRows, uint32_t uColumns, float fSpacing)
@@ -627,23 +728,9 @@ pl_load_grass(plAppData* ptData, uint32_t uRows, uint32_t uColumns, float fSpaci
 
     // create bind group layouts
     plBindGroupLayout tGroupLayout0 = {
-
         .uBufferCount = 1,
         .aBuffers      = {
-            {
-                .tType       = PL_BUFFER_BINDING_TYPE_UNIFORM,
-                .uSlot       = 0,
-                .tStageFlags = VK_SHADER_STAGE_VERTEX_BIT
-            }
-        },
-
-        .uTextureCount = 1,
-        .aTextures     = {
-            {
-                .tType       = PL_TEXTURE_BINDING_TYPE_SAMPLED,
-                .uSlot       = 1,
-                .tStageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-            }  
+            { .tType       = PL_BUFFER_BINDING_TYPE_UNIFORM, .uSlot = 0, .tStageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT}
         }
     };
     pl_create_bind_group(&ptData->tGraphics, &tGroupLayout0, &ptData->tGrassBindGroup2, "grass bind group");
@@ -663,12 +750,14 @@ pl_load_grass(plAppData* ptData, uint32_t uRows, uint32_t uColumns, float fSpaci
         .tViewType   = VK_IMAGE_VIEW_TYPE_2D
     };
     ptData->uGrassTexture  = pl_create_texture(&ptData->tGraphics.tResourceManager, tTextureDesc, sizeof(unsigned char) * texHeight * texHeight * 4, rawBytes);
-    pl_update_bind_group(&ptData->tGraphics, &ptData->tGrassBindGroup2, 1, &ptData->uGrassConstantBuffer, 1, &ptData->uGrassTexture);
+    pl_update_bind_group(&ptData->tGraphics, &ptData->tGrassBindGroup2, 1, &ptData->uGrassConstantBuffer, 0, NULL);
 
     ptData->tGrassMesh.uIndexCount   = (uint32_t)pl_sb_size(sbtIndexBuffer);
     ptData->tGrassMesh.uVertexCount  = (uint32_t)pl_sb_size(sbtVertexBuffer);
     ptData->tGrassMesh.uIndexBuffer  = pl_create_index_buffer(&ptData->tGraphics.tResourceManager, sizeof(uint32_t) * pl_sb_size(sbtIndexBuffer), sbtIndexBuffer);
     ptData->tGrassMesh.uVertexBuffer = pl_create_vertex_buffer(&ptData->tGraphics.tResourceManager, sizeof(plVec3) * pl_sb_size(sbtVertexBuffer), sizeof(plVec3), sbtVertexBuffer);
+    ptData->tGrassMesh.ulVertexStreamMask0 = PL_MESH_FORMAT_FLAG_HAS_POSITION;
+    ptData->tGrassMesh.ulVertexStreamMask1 = PL_MESH_FORMAT_FLAG_HAS_NORMAL | PL_MESH_FORMAT_FLAG_HAS_TEXCOORD_0;
 
     const uint32_t uStorageOffset = pl_sb_size(ptData->tRenderer.sbfStorageBuffer) / 4;
     pl_sb_reserve(ptData->tRenderer.sbfStorageBuffer, pl_sb_size(ptData->tRenderer.sbfStorageBuffer) + pl_sb_size(sbtStorageBuffer) * 4);

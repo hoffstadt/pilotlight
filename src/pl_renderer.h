@@ -60,12 +60,12 @@ void     pl_setup_asset_registry  (plGraphics* ptGraphics, plAssetRegistry* ptRe
 void     pl_cleanup_asset_registry(plAssetRegistry* ptRegistry);
 
 // materials
-uint32_t pl_create_material       (plAssetRegistry* ptRegistry, const char* pcName);
+void     pl_initialize_material   (plMaterial* ptMaterial, const char* pcName);
+uint32_t pl_create_material       (plAssetRegistry* ptRegistry, plMaterial* ptMaterial);
 
 // renderer
 void     pl_setup_renderer        (plGraphics* ptGraphics, plAssetRegistry* ptRegistry, plRenderer* ptRendererOut);
 void     pl_cleanup_renderer      (plRenderer* ptRenderer);
-void     pl_finalize_material     (plRenderer* ptRenderer, uint32_t uMaterial);
 void     pl_renderer_begin_frame  (plRenderer* ptRenderer);
 void     pl_renderer_submit_meshes(plRenderer* ptRenderer, plMesh* ptMeshes, uint32_t* puMaterials, plBindGroup* ptBindGroup, uint32_t uConstantBuffer, uint32_t uMeshCount);
 
@@ -83,8 +83,7 @@ typedef struct _plGlobalInfo
 
 typedef struct _plMaterialInfo
 {
-    uint32_t bHasColorTexture;
-    int      _unused[3];
+    plVec4 tAlbedo;
 } plMaterialInfo;
 
 typedef struct _plObjectInfo
@@ -106,17 +105,13 @@ typedef struct _plMaterial
     // maps
     uint32_t uAlbedoMap;
     uint32_t uNormalMap;
-    uint32_t uSpecularMap;
+    uint32_t uEmissiveMap;
 
-    // temporary
-    plMeshFormatFlags ulVertexStreamMask0; // until shader variants support
-    plMeshFormatFlags ulVertexStreamMask1; // until shader variants support
-
-    // internal
-    uint32_t    uIndex;
+    // misc
     uint32_t    uShader;
     uint32_t    uMaterialConstantBuffer;
     plBindGroup tMaterialBindGroup;
+    uint64_t    ulShaderTextureFlags;
 
 } plMaterial;
 
@@ -124,6 +119,7 @@ typedef struct _plAssetRegistry
 {
     plGraphics*     ptGraphics;
     plMaterial*     sbtMaterials;
+    uint32_t        uDummyTexture;
 } plAssetRegistry;
 
 typedef struct _plRenderer
@@ -135,7 +131,7 @@ typedef struct _plRenderer
     plDrawArea*      sbtDrawAreas;
     plBindGroup      tGlobalBindGroup;
     uint32_t         uGlobalStorageBuffer;
-    uint32_t         uGlobalConstantBuffer;
+    uint32_t         uGlobalConstantBuffer;   
 } plRenderer;
 
 #endif // PL_RENDERER_H

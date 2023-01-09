@@ -23,7 +23,7 @@ with pl.project("pilotlight"):
     pl.push_profile(pl.Profile.PILOT_LIGHT_DEBUG)
 
     pl.push_definitions("_USE_MATH_DEFINES", "PL_PROFILING_ON", "PL_ALLOW_HOT_RELOAD", "PL_ENABLE_VALIDATION_LAYERS")
-    pl.push_include_directories("../out", "../dependencies/stb", "../src", "../extensions")
+    pl.push_include_directories("../out", "../dependencies/stb", "../dependencies/cgltf", "../src", "../extensions")
     pl.push_link_directories("../out")
     pl.push_output_directory("../out")
         
@@ -112,7 +112,7 @@ with pl.project("pilotlight"):
         pl.push_profile(pl.Profile.VULKAN)
         pl.push_definitions("PL_VULKAN_BACKEND")
         pl.push_source_files("app_vulkan.c")
-        pl.push_vulkan_glsl_files("../shaders/glsl/", "phong.frag", "vertex_shader.vert")
+        pl.push_vulkan_glsl_files("../shaders/glsl/", "phong.frag", "primitive.vert")
         with pl.configuration("debug"):
             with pl.platform(pl.PlatformType.WIN32):
                 with pl.compiler("msvc", pl.CompilerType.MSVC):

@@ -11,6 +11,15 @@
 
 #include "pl_draw.c"
 
+// extensions
+#ifdef PL_VULKAN_BACKEND
+#include "../extensions/pl_gltf_extension.c"
+#endif
+
+#define PL_STL_EXT_IMPLEMENTATION
+#include "../extensions/pl_stl_extension.h"
+#undef PL_STL_EXT_IMPLEMENTATION
+
 #ifdef PL_VULKAN_BACKEND
 #include "pl_renderer.c"
 #endif
@@ -86,6 +95,3 @@
 #include "stb_image.h"
 #undef STB_IMAGE_IMPLEMENTATION
 
-#define PL_STL_EXT_IMPLEMENTATION
-#include "../extensions/pl_stl_ext.h"
-#undef PL_STL_EXT_IMPLEMENTATION
