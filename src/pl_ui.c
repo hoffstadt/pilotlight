@@ -65,7 +65,6 @@ static inline float pl__ui_get_window_content_width_available(void)             
 
 // current cursor
 static inline void  pl__ui_advance_cursor                    (float fX, float fY)                     { gptCtx->ptCurrentWindow->tTempData.tCursorPos.x += fX; gptCtx->ptCurrentWindow->tTempData.tCursorPos.y += fY; }
-static inline void  pl__ui_advance_cursor_vec2               (plVec2 tPos)                            { pl_add_vec2(gptCtx->ptCurrentWindow->tTempData.tCursorPos, tPos); }
 static inline void  pl__ui_next_line                         (void)                                   { gptCtx->ptCurrentWindow->tTempData.tCursorPos.x = gptCtx->ptCurrentWindow->tTempData.tCursorStartPos.x + (float)gptCtx->ptCurrentWindow->tTempData.uTreeDepth * gptCtx->tStyle.fIndentSize; pl__ui_advance_cursor(0.0f, pl__ui_get_frame_height() + gptCtx->tStyle.tItemSpacing.y * 2.0f);}
 
 // previous cursor
@@ -75,7 +74,6 @@ static inline void  pl__ui_set_cursor_prev                   (float fX, float fY
 static inline void  pl__ui_set_cursor_prev_vec2              (plVec2 tPos)                            { gptCtx->ptCurrentWindow->tTempData.tCursorPrevLine = tPos; }
 static inline void  pl__ui_set_relative_cursor_prev          (float fX, float fY)                     { gptCtx->ptCurrentWindow->tTempData.tCursorPrevLine.x = fX + gptCtx->ptCurrentWindow->tTempData.tCursorPos.x; gptCtx->ptCurrentWindow->tTempData.tCursorPrevLine.y = gptCtx->ptCurrentWindow->tTempData.tCursorPos.y + fY; }
 static inline void  pl__ui_set_relative_cursor_prev_vec2     (plVec2 tPos)                            { gptCtx->ptCurrentWindow->tTempData.tCursorPrevLine = pl_add_vec2(gptCtx->ptCurrentWindow->tTempData.tCursorPos, tPos); }
-static inline void  pl__ui_advance_cursor_prev_vec2          (plVec2 tPos)                            { pl_add_vec2(gptCtx->ptCurrentWindow->tTempData.tCursorPrevLine, tPos); }
 
 //-----------------------------------------------------------------------------
 // [SECTION] implementations
