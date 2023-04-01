@@ -1430,6 +1430,8 @@ pl_ui_slider_float_f(const char* pcLabel, float* pfValue, float fMin, float fMax
     {
         *pfValue += pl_get_mouse_drag_delta(PL_MOUSE_BUTTON_LEFT, 1.0f).x * fConv;
         *pfValue = pl_clampf(fMin, *pfValue, fMax);
+        if(pl_get_mouse_pos().x < tBoundingBox.tMin.x) *pfValue = fMin;
+        if(pl_get_mouse_pos().x > tBoundingBox.tMax.x) *pfValue = fMax;
         pl_reset_mouse_drag_delta(PL_MOUSE_BUTTON_LEFT);
     }
 
