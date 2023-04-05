@@ -2614,7 +2614,7 @@ pl_ui_is_item_hoverable(const plRect* ptBox, uint32_t uHash)
 {
     plUiWindow* ptWindow = gptCtx->ptCurrentWindow;
 
-    if(ptWindow == gptCtx->ptMovingWindow || ptWindow == gptCtx->ptSizingWindow || ptWindow == gptCtx->ptWheelingWindow || !gptCtx->bMouseOwned)
+    if(gptCtx->ptMovingWindow|| !gptCtx->bMouseOwned)
         return false;
 
     if(!pl_is_mouse_hovering_rect(ptBox->tMin, ptBox->tMax))
@@ -2631,7 +2631,7 @@ pl_ui_is_item_hoverable_circle(plVec2 tP, float fRadius, uint32_t uHash)
 {
     plUiWindow* ptWindow = gptCtx->ptCurrentWindow;
 
-    if(ptWindow == gptCtx->ptMovingWindow || ptWindow == gptCtx->ptSizingWindow || ptWindow == gptCtx->ptWheelingWindow || !gptCtx->bMouseOwned)
+    if(gptCtx->ptMovingWindow || !gptCtx->bMouseOwned)
         return false;
 
     if(!pl_ui_does_circle_contain_point(tP, fRadius, pl_get_mouse_pos()))
