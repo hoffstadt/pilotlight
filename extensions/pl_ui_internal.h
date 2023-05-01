@@ -130,6 +130,7 @@ typedef struct _plUiStyle
     plVec2 tItemSpacing;
     plVec2 tInnerSpacing;
     plVec2 tFramePadding;
+    uint32_t tCircleSegments;
 
     // colors
     plVec4 tTitleActiveCol;

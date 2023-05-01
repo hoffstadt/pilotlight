@@ -36,6 +36,10 @@ Index of this file:
 #define pl_sprintf stbsp_sprintf
 #define pl_vsprintf stbsp_vsprintf
 
+bool tDebugItemSize = false;
+bool tDebugText = false;
+bool tDebugBoundingBox = false;
+
 //-----------------------------------------------------------------------------
 // [SECTION] context
 //-----------------------------------------------------------------------------
@@ -390,6 +394,7 @@ pl_ui_set_dark_theme(void)
     gptCtx->tStyle.tItemSpacing  = (plVec2){8.0f, 4.0f};
     gptCtx->tStyle.tInnerSpacing = (plVec2){4.0f, 4.0f};
     gptCtx->tStyle.tFramePadding = (plVec2){4.0f, 4.0f};
+    gptCtx->tStyle.tCircleSegments = 12;
 
     // colors
     gptCtx->tStyle.tTitleActiveCol      = (plVec4){0.33f, 0.02f, 0.10f, 1.00f};
@@ -1106,24 +1111,19 @@ pl_ui_radio_button(const char* pcText, int* piValue, int iButtonValue)
     plDrawApiI* ptDraw = gptCtx->ptDraw;
     plUiWindow* ptWindow = gptCtx->ptCurrentWindow;
     plUiLayoutRow* ptCurrentRow = &ptWindow->tTempData.tCurrentLayoutRow;
-    const plVec2 tWidgetSize = pl_ui_calculate_item_size(pl_ui_get_frame_height());
     const plVec2 tStartPos   = pl__ui_get_cursor_pos();
+    const plVec2 tWidgetSize = pl_ui_calculate_item_size(pl_ui_get_frame_height());
+
+    const float tButtonRadius = gptCtx->tStyle.fFontSize / 2.0f;
+    const plVec2 tButtonCenter = {tStartPos.x + gptCtx->tStyle.tFramePadding.x + tButtonRadius, tStartPos.y + gptCtx->tStyle.tFramePadding.y + tButtonRadius};
 
     const uint32_t uHash = pl_str_hash(pcText, 0, pl_sb_top(gptCtx->sbuIdStack));
-    const plVec2 tTextSize = pl_ui_calculate_text_size(gptCtx->ptFont, gptCtx->tStyle.fFontSize, pcText, -1.0f);
-    plRect tTextBounding = ptDraw->calculate_text_bb_ex(gptCtx->ptFont, gptCtx->tStyle.fFontSize, tStartPos, pcText, pl_ui_find_renderered_text_end(pcText, NULL), -1.0f);
-    const plVec2 tTextActualCenter = pl_rect_center(&tTextBounding);
+    const plVec2 tTextStartPos = {tStartPos.x + gptCtx->tStyle.tFramePadding.x + tButtonRadius * 2.0f + gptCtx->tStyle.tInnerSpacing.x, tStartPos.y + gptCtx->tStyle.tFramePadding.y};
+    const plRect tTextBounding = ptDraw->calculate_text_bb_ex(gptCtx->ptFont, gptCtx->tStyle.fFontSize, tTextStartPos, pcText, pl_ui_find_renderered_text_end(pcText, NULL), -1.0f);
+    const plRect tTextRect = (plRect){(plVec2){tTextStartPos.x, tTextStartPos.y},(plVec2){tTextBounding.tMax.x, tTextStartPos.y + gptCtx->tStyle.fFontSize}};
 
-    const plVec2 tSize = {tTextSize.x + 2.0f * gptCtx->tStyle.tFramePadding.x + gptCtx->tStyle.tInnerSpacing.x + tWidgetSize.y, tWidgetSize.y};
-    // tSize = pl_floor_vec2(tSize);
+    const plRect tBoundingBox = {(plVec2){tStartPos.x + gptCtx->tStyle.tFramePadding.x, tStartPos.y + gptCtx->tStyle.tFramePadding.y},tTextRect.tMax};
 
-    const plVec2 tTextStartPos = {
-        .x = tStartPos.x + tWidgetSize.y + gptCtx->tStyle.tInnerSpacing.x + gptCtx->tStyle.tFramePadding.x,
-        .y = tStartPos.y + tStartPos.y + tWidgetSize.y / 2.0f - tTextActualCenter.y
-    };
-
-    plRect tBoundingBox = pl_rect_expand_vec2(&tTextBounding, (plVec2){0.5f * (gptCtx->tStyle.tFramePadding.x + gptCtx->tStyle.tInnerSpacing.x + tWidgetSize.y), 0.0f});
-    tBoundingBox = pl_rect_move_start_x(&tBoundingBox, tStartPos.x + gptCtx->tStyle.tFramePadding.x);
     bool bHovered = false;
     bool bHeld = false;
     const bool bPressed = pl_ui_button_behavior(&tBoundingBox, uHash, &bHovered, &bHeld);
@@ -1131,14 +1131,30 @@ pl_ui_radio_button(const char* pcText, int* piValue, int iButtonValue)
     if(bPressed)
         *piValue = iButtonValue;
 
-    if(gptCtx->uActiveId == uHash)       ptDraw->add_circle_filled(ptWindow->ptFgLayer, (plVec2){tStartPos.x + tWidgetSize.y / 2.0f, tStartPos.y + tWidgetSize.y / 2.0f}, gptCtx->tStyle.fFontSize / 1.5f, gptCtx->tStyle.tFrameBgActiveCol, 12);
-    else if(gptCtx->uHoveredId == uHash) ptDraw->add_circle_filled(ptWindow->ptFgLayer, (plVec2){tStartPos.x + tWidgetSize.y / 2.0f, tStartPos.y + tWidgetSize.y / 2.0f}, gptCtx->tStyle.fFontSize / 1.5f, gptCtx->tStyle.tFrameBgHoveredCol, 12);
-    else                                 ptDraw->add_circle_filled(ptWindow->ptFgLayer, (plVec2){tStartPos.x + tWidgetSize.y / 2.0f, tStartPos.y + tWidgetSize.y / 2.0f}, gptCtx->tStyle.fFontSize / 1.5f, gptCtx->tStyle.tFrameBgCol, 12);
+    if(gptCtx->uActiveId == uHash)       ptDraw->add_circle_filled(ptWindow->ptFgLayer, tButtonCenter, tButtonRadius, gptCtx->tStyle.tFrameBgActiveCol, gptCtx->tStyle.tCircleSegments);
+    else if(gptCtx->uHoveredId == uHash) ptDraw->add_circle_filled(ptWindow->ptFgLayer, tButtonCenter, tButtonRadius, gptCtx->tStyle.tFrameBgHoveredCol, gptCtx->tStyle.tCircleSegments);
+    else                                 ptDraw->add_circle_filled(ptWindow->ptFgLayer, tButtonCenter, tButtonRadius, gptCtx->tStyle.tFrameBgCol, gptCtx->tStyle.tCircleSegments);
 
     if(*piValue == iButtonValue)
-        ptDraw->add_circle_filled(ptWindow->ptFgLayer, (plVec2){tStartPos.x + tWidgetSize.y / 2.0f, tStartPos.y + tWidgetSize.y / 2.0f}, gptCtx->tStyle.fFontSize / 2.5f, gptCtx->tStyle.tCheckmarkCol, 12);
+        ptDraw->add_circle_filled(ptWindow->ptFgLayer, tButtonCenter, tButtonRadius/1.5f, gptCtx->tStyle.tCheckmarkCol, gptCtx->tStyle.tCircleSegments);
 
     pl_ui_add_text(ptWindow->ptFgLayer, gptCtx->ptFont, gptCtx->tStyle.fFontSize, tTextStartPos, gptCtx->tStyle.tTextCol, pcText, -1.0f);
+
+    // Debug Layer
+    // Draw item start and size rectangle
+    if(tDebugItemSize)
+        ptDraw->add_rect(gptCtx->ptDebugLayer, tStartPos, (plVec2){tWidgetSize.x+tStartPos.x, tWidgetSize.y+tStartPos.y}, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, 1.0f);
+
+    // Draw text bounding box and text rect
+    if(tDebugText)
+    {   
+        ptDraw->add_rect(gptCtx->ptDebugLayer, tTextBounding.tMin, tTextBounding.tMax, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, 1.0f);
+        ptDraw->add_rect(gptCtx->ptDebugLayer, tTextRect.tMin, tTextRect.tMax, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, 1.0f);
+    }
+
+    // Draw bounding box
+    if(tDebugBoundingBox)
+        ptDraw->add_rect(gptCtx->ptDebugLayer, tBoundingBox.tMin, tBoundingBox.tMax, (plVec4){1.0f, 1.0f, 0.0f, 1.0f}, 1.0f);
 
     pl_ui_advance_cursor(tWidgetSize.x, tWidgetSize.y);
     return bPressed;
@@ -2401,6 +2417,11 @@ pl_ui_style(bool* pbOpen)
                 pl_ui_slider_float("Indent", &ptStyle->fIndentSize, 0.0f, 32.0f); 
                 pl_ui_slider_float("Slider Size", &ptStyle->fSliderSize, 3.0f, 32.0f); 
                 pl_ui_slider_float("Font Size", &ptStyle->fFontSize, 13.0f, 48.0f); 
+                pl_ui_slider_float("Inner Spacing x", &ptStyle->tInnerSpacing.x, 0.0f, 48.0f);
+                pl_ui_slider_float("Inner Spacing y", &ptStyle->tInnerSpacing.y, 0.0f, 48.0f);
+                pl_ui_slider_float("Frame Padding x", &ptStyle->tFramePadding.x, 0.0f, 48.0f);
+                pl_ui_slider_float("Frame Padding y", &ptStyle->tFramePadding.y, 0.0f, 48.0f);
+                pl_ui_slider_int("Circle Segments", &(int)ptStyle->tCircleSegments, 0, 20);
                 pl_ui_end_tab();
             }
             pl_ui_end_tab_bar();
