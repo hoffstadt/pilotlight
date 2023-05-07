@@ -36,9 +36,9 @@ Index of this file:
 #define pl_sprintf stbsp_sprintf
 #define pl_vsprintf stbsp_vsprintf
 
-bool tDebugItemSize = false;
+bool tDebugItemSize = true;
 bool tDebugText = false;
-bool tDebugBoundingBox = false;
+bool tDebugBoundingBox = true;
 
 //-----------------------------------------------------------------------------
 // [SECTION] context
@@ -394,7 +394,7 @@ pl_ui_set_dark_theme(void)
     gptCtx->tStyle.tItemSpacing  = (plVec2){8.0f, 4.0f};
     gptCtx->tStyle.tInnerSpacing = (plVec2){4.0f, 4.0f};
     gptCtx->tStyle.tFramePadding = (plVec2){4.0f, 4.0f};
-    gptCtx->tStyle.tCircleSegments = 12;
+    gptCtx->tStyle.uCircleSegments = 12;
 
     // colors
     gptCtx->tStyle.tTitleActiveCol      = (plVec4){0.33f, 0.02f, 0.10f, 1.00f};
@@ -1114,11 +1114,11 @@ pl_ui_radio_button(const char* pcText, int* piValue, int iButtonValue)
     const plVec2 tStartPos   = pl__ui_get_cursor_pos();
     const plVec2 tWidgetSize = pl_ui_calculate_item_size(pl_ui_get_frame_height());
 
-    const float tButtonRadius = gptCtx->tStyle.fFontSize / 2.0f;
-    const plVec2 tButtonCenter = {tStartPos.x + gptCtx->tStyle.tFramePadding.x + tButtonRadius, tStartPos.y + gptCtx->tStyle.tFramePadding.y + tButtonRadius};
+    const float fButtonRadius = gptCtx->tStyle.fFontSize / 2.0f;
+    const plVec2 tButtonCenter = {tStartPos.x + gptCtx->tStyle.tFramePadding.x + fButtonRadius, tStartPos.y + gptCtx->tStyle.tFramePadding.y + fButtonRadius};
 
     const uint32_t uHash = pl_str_hash(pcText, 0, pl_sb_top(gptCtx->sbuIdStack));
-    const plVec2 tTextStartPos = {tStartPos.x + gptCtx->tStyle.tFramePadding.x + tButtonRadius * 2.0f + gptCtx->tStyle.tInnerSpacing.x, tStartPos.y + gptCtx->tStyle.tFramePadding.y};
+    const plVec2 tTextStartPos = {tStartPos.x + gptCtx->tStyle.tFramePadding.x + fButtonRadius * 2.0f + gptCtx->tStyle.tInnerSpacing.x, tStartPos.y + gptCtx->tStyle.tFramePadding.y};
     const plRect tTextBounding = ptDraw->calculate_text_bb_ex(gptCtx->ptFont, gptCtx->tStyle.fFontSize, tTextStartPos, pcText, pl_ui_find_renderered_text_end(pcText, NULL), -1.0f);
     const plRect tTextRect = (plRect){(plVec2){tTextStartPos.x, tTextStartPos.y},(plVec2){tTextBounding.tMax.x, tTextStartPos.y + gptCtx->tStyle.fFontSize}};
 
@@ -1131,12 +1131,12 @@ pl_ui_radio_button(const char* pcText, int* piValue, int iButtonValue)
     if(bPressed)
         *piValue = iButtonValue;
 
-    if(gptCtx->uActiveId == uHash)       ptDraw->add_circle_filled(ptWindow->ptFgLayer, tButtonCenter, tButtonRadius, gptCtx->tStyle.tFrameBgActiveCol, gptCtx->tStyle.tCircleSegments);
-    else if(gptCtx->uHoveredId == uHash) ptDraw->add_circle_filled(ptWindow->ptFgLayer, tButtonCenter, tButtonRadius, gptCtx->tStyle.tFrameBgHoveredCol, gptCtx->tStyle.tCircleSegments);
-    else                                 ptDraw->add_circle_filled(ptWindow->ptFgLayer, tButtonCenter, tButtonRadius, gptCtx->tStyle.tFrameBgCol, gptCtx->tStyle.tCircleSegments);
+    if(gptCtx->uActiveId == uHash)       ptDraw->add_circle_filled(ptWindow->ptFgLayer, tButtonCenter, fButtonRadius, gptCtx->tStyle.tFrameBgActiveCol, gptCtx->tStyle.uCircleSegments);
+    else if(gptCtx->uHoveredId == uHash) ptDraw->add_circle_filled(ptWindow->ptFgLayer, tButtonCenter, fButtonRadius, gptCtx->tStyle.tFrameBgHoveredCol, gptCtx->tStyle.uCircleSegments);
+    else                                 ptDraw->add_circle_filled(ptWindow->ptFgLayer, tButtonCenter, fButtonRadius, gptCtx->tStyle.tFrameBgCol, gptCtx->tStyle.uCircleSegments);
 
     if(*piValue == iButtonValue)
-        ptDraw->add_circle_filled(ptWindow->ptFgLayer, tButtonCenter, tButtonRadius/1.5f, gptCtx->tStyle.tCheckmarkCol, gptCtx->tStyle.tCircleSegments);
+        ptDraw->add_circle_filled(ptWindow->ptFgLayer, tButtonCenter, fButtonRadius/1.5f, gptCtx->tStyle.tCheckmarkCol, gptCtx->tStyle.uCircleSegments);
 
     pl_ui_add_text(ptWindow->ptFgLayer, gptCtx->ptFont, gptCtx->tStyle.fFontSize, tTextStartPos, gptCtx->tStyle.tTextCol, pcText, -1.0f);
 
@@ -2421,7 +2421,9 @@ pl_ui_style(bool* pbOpen)
                 pl_ui_slider_float("Inner Spacing y", &ptStyle->tInnerSpacing.y, 0.0f, 48.0f);
                 pl_ui_slider_float("Frame Padding x", &ptStyle->tFramePadding.x, 0.0f, 48.0f);
                 pl_ui_slider_float("Frame Padding y", &ptStyle->tFramePadding.y, 0.0f, 48.0f);
-                pl_ui_slider_int("Circle Segments", &(int)ptStyle->tCircleSegments, 0, 20);
+                int iTempCircleSegments = (int)ptStyle->uCircleSegments;
+                pl_ui_slider_int("Circle Segments", &iTempCircleSegments, 0, 100);
+                ptStyle->uCircleSegments = iTempCircleSegments;
                 pl_ui_end_tab();
             }
             pl_ui_end_tab_bar();
