@@ -710,8 +710,23 @@ def generate_macos_build(name_override=None):
             buffer += '   esac\n'
             buffer += 'done\n\n'
 
-            for register_config in project._registered_configurations:
+            buffer += 'time_elapsed () {\n'
+            buffer += '    # returns the time elapsed from $1 in seconds\n\n'
+            buffer += '    CURRENT_TIME=$(date +%s)\n\n'
+            buffer += '    # calculate the difference\n'
+            buffer += '    DIFF=$(($CURRENT_TIME - $1))\n\n'
+            buffer += '    # transform in seconds\n'
+            buffer += '    SECONDS=$(($DIFF % 60))\n\n'
+            buffer += '    # return difference in seconds\n'
+            buffer += '    echo $SECONDS\n'
+            buffer += '}\n\n'
 
+            buffer += '# compile timer variables init\n'
+            buffer += 'COMPILE_START_TIME=0\n'
+            buffer += 'COMPILE_DIFF=0\n\n'
+
+
+            for register_config in project._registered_configurations:
                 # find main target
                 target_found = False
                 for target in project._targets:
@@ -743,6 +758,7 @@ def generate_macos_build(name_override=None):
                                                     buffer += '# cleanup binaries if not hot reloading\n'
                                                     buffer += '    PL_HOT_RELOAD_STATUS=0\n'
                                                     target_found = True
+
                 for target in project._targets:
                     for config in target._configurations:
                         if config._name == register_config:
@@ -770,6 +786,9 @@ def generate_macos_build(name_override=None):
                                         if settings._compiler_type == CompilerType.CLANG:
 
                                             buffer += _title(config._name + " | " + target._name, file_type)
+
+                                            buffer += '\n# save current time\n'
+                                            buffer += 'COMPILE_START_TIME=$(date +%s)\n'
 
                                             if settings._pre_build_step is not None:
                                                 buffer += settings._pre_build_step
@@ -894,7 +913,6 @@ def generate_macos_build(name_override=None):
                                                                                     settings._source_files.append(settings2._output_directory + "/" + settings2._output_binary + ".a")
 
                                                 if target._target_type == TargetType.STATIC_LIBRARY:
-                    
                                                     buffer += '# run compiler only\n'
                                                     buffer += "echo\n"
                                                     buffer += 'echo ${YELLOW}Step: ' + target._name +'${NC}\n'
@@ -954,10 +972,13 @@ def generate_macos_build(name_override=None):
                                                 buffer += "then\n"
                                                 buffer += "    PL_RESULT=${BOLD}${RED}Failed.${NC}\n"
                                                 buffer += "fi\n"
+                                                
+                                                buffer += '\n# get time elapsed\n'
+                                                buffer += 'COMPILE_DIFF=$(time_elapsed $COMPILE_START_TIME)\n'
 
                                                 buffer += "\n# print results\n"
-                                                buffer += "echo ${CYAN}Results: ${NC} ${PL_RESULT}\n"
-                                                buffer += "echo ${CYAN}~~~~~~~~~~~~~~~~~~~~~~${NC}\n"
+                                                buffer += "echo ${CYAN}Results: ${NC} ${PL_RESULT} in $(echo $COMPILE_DIFF)s\n"
+                                                buffer += "echo ${CYAN}~~~~~~~~~~~~~~~~~~~~~~~${NC}\n"
 
                                                 if settings._vulkan_glsl_shader_files:
                                                     buffer += '\n\n# cleanup old glsl vulkan shaders\n'
