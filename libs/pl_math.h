@@ -177,7 +177,6 @@ typedef struct _plRect
 
 #endif // PL_MATH_INC
 
-#define PL_MATH_IMPLEMENTATION  // Todo(Quattro) remove this
 #if defined(PL_MATH_IMPLEMENTATION) && !defined(PL_MATH_IMPLEMENTATION_H)
 #define PL_MATH_IMPLEMENTATION_H
 
