@@ -34,7 +34,7 @@ Index of this file:
 #include "pl_string.h"
 #include "pl_ds.h"
 #include "pl_io.h"
-#define PL_MATH_INCLUDE_FUNCTIONS
+#define PL_MATH_IMPLEMENTATION
 #include "pl_math.h"
 
 // stb

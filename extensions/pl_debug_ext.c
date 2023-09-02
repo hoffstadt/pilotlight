@@ -22,7 +22,7 @@ Index of this file:
 #include "pl_ds.h"
 #include "pl_io.h"
 #include "pl_debug_ext.h"
-#define PL_MATH_INCLUDE_FUNCTIONS
+#define PL_MATH_IMPLEMENTATION
 #include "pl_math.h"
 
 // extra

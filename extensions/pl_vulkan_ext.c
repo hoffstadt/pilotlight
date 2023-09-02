@@ -22,7 +22,7 @@ Index of this file:
 #include "pl_profile.h"
 #include "pl_log.h"
 #include "pl_string.h"
-#define PL_MATH_INCLUDE_FUNCTIONS
+#define PL_MATH_IMPLEMENTATION
 #include "pl_math.h"
 
 // vulkan stuff

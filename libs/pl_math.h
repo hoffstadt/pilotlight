@@ -2,13 +2,13 @@
    pl_math.h, v0.4 (WIP)
 
    Do this:
-        #define PL_MATH_INCLUDE_FUNCTIONS
+        #define PL_MATH_IMPLEMENTATION
    before you include this file in *one* C or C++ file to create include math functions.
    // i.e. it should look like this:
    #include ...
    #include ...
    #include ...
-   #define PL_MATH_INCLUDE_FUNCTIONS
+   #define PL_MATH_IMPLEMENTATION
    #include "pl_math.h"
 */
 
@@ -38,6 +38,10 @@ Index of this file:
 #ifndef PL_MATH_INC
 #define PL_MATH_INC
 
+// Check(Quattro) to use SSE inside the structs, we need to include this library
+//          └----> To Hoffstadt: check where you want to put this include, since you've put them inside the implementation
+#include <smmintrin.h>
+
 //-----------------------------------------------------------------------------
 // [SECTION] forward declarations & basic types
 //-----------------------------------------------------------------------------
@@ -59,7 +63,7 @@ typedef struct _plRect plRect;
 #define PL_LN2      0.69314718f // ln(2)
 #define PL_LN10     2.30258509f // ln(10)
 #define PL_PI       3.14159265f // pi
-#define PL_2PI      6.28318530f // pi
+#define PL_2PI      6.28318530f // 2*pi
 #define PL_PI_2     1.57079632f // pi/2
 #define PL_PI_3     1.04719755f // pi/3
 #define PL_PI_4     0.78539816f // pi/4
@@ -136,6 +140,7 @@ typedef union _plVec4
         float ignored4_, ignored5_;
         plVec2 zw;
     };
+    __m128 sse;
     float d[4];
 } plVec4;
 
@@ -160,6 +165,7 @@ typedef union _plMat4
         float x34;
         float x44;
     };
+    __m128 sse_col[4];
     float d[16];
 } plMat4;
 
@@ -171,8 +177,9 @@ typedef struct _plRect
 
 #endif // PL_MATH_INC
 
-#if defined(PL_MATH_INCLUDE_FUNCTIONS) && !defined(PL_MATH_INCLUDE_FUNCTIONS_H)
-#define PL_MATH_INCLUDE_FUNCTIONS_H
+#define PL_MATH_IMPLEMENTATION  // Todo(Quattro) remove this
+#if defined(PL_MATH_IMPLEMENTATION) && !defined(PL_MATH_IMPLEMENTATION_H)
+#define PL_MATH_IMPLEMENTATION_H
 
 //-----------------------------------------------------------------------------
 // [SECTION] includes
@@ -187,13 +194,13 @@ typedef struct _plRect
 //-----------------------------------------------------------------------------
 
 #ifdef __cplusplus
-    #define pl_create_vec2(XARG, YARG)                  {(XARG), (YARG)}
-    #define pl_create_vec3(XARG, YARG, ZARG)            {(XARG), (YARG), (ZARG)}
-    #define pl_create_vec4(XARG, YARG, ZARG, WARG)      {(XARG), (YARG), (ZARG), (WARG)}
-    #define pl_create_mat4_diag(XARG, YARG, ZARG, WARG) {(XARG), 0.0, 0.0f, 0.0f, 0.0f, (YARG), 0.0f, 0.0f, 0.0f, 0.0f, (ZARG), 0.0f, 0.0f, 0.0f, 0.0f, (WARG)}
-    #define pl_create_mat4_cols(XARG, YARG, ZARG, WARG) {(XARG).x, (XARG).y, (XARG).z, (XARG).w, (YARG).x, (YARG).y, (YARG).z, (YARG).w, (ZARG).x, (ZARG).y, (ZARG).z, (ZARG).w, (WARG).x, (WARG).y, (WARG).z, (WARG).w}
-    #define pl_create_rect_vec2(XARG, YARG)             {(XARG), (YARG)}
-    #define pl_create_rect(XARG, YARG, ZARG, WARG)      {{(XARG), (YARG)}, {(ZARG), (WARG)}}
+    #define pl_create_vec2(XARG, YARG)                  plVec2{(XARG), (YARG)}
+    #define pl_create_vec3(XARG, YARG, ZARG)            plVec3{(XARG), (YARG), (ZARG)}
+    #define pl_create_vec4(XARG, YARG, ZARG, WARG)      plVec4{(XARG), (YARG), (ZARG), (WARG)}
+    #define pl_create_mat4_diag(XARG, YARG, ZARG, WARG) plMat4{(XARG), 0.0, 0.0f, 0.0f, 0.0f, (YARG), 0.0f, 0.0f, 0.0f, 0.0f, (ZARG), 0.0f, 0.0f, 0.0f, 0.0f, (WARG)}
+    #define pl_create_mat4_cols(XARG, YARG, ZARG, WARG) plMat4{(XARG).x, (XARG).y, (XARG).z, (XARG).w, (YARG).x, (YARG).y, (YARG).z, (YARG).w, (ZARG).x, (ZARG).y, (ZARG).z, (ZARG).w, (WARG).x, (WARG).y, (WARG).z, (WARG).w}
+    #define pl_create_rect_vec2(XARG, YARG)             plRect{(XARG), (YARG)}
+    #define pl_create_rect(XARG, YARG, ZARG, WARG)      plRect{{(XARG), (YARG)}, {(ZARG), (WARG)}}
 #else
     #define pl_create_vec2(XARG, YARG)                  (plVec2){(XARG), (YARG)}
     #define pl_create_vec3(XARG, YARG, ZARG)            (plVec3){(XARG), (YARG), (ZARG)}
@@ -231,6 +238,7 @@ static inline double   pl_clampd  (double dMin, double dValue, double dMax) { if
 static inline float    pl_clamp01f(float fValue)                            { return pl_clampf(0.0f, fValue, 1.0f); }
 static inline double   pl_clamp01d(double dValue)                           { return pl_clampd(0.0, dValue, 1.0); }
 static inline size_t   pl_align_up(size_t szValue, size_t szAlign)          { return ((szValue + (szAlign - 1)) & ~(szAlign - 1)); }
+static inline float    pl_sqrt(float x)                                        { return _mm_cvtss_f32(_mm_sqrt_ss(_mm_set_ss(x))); }
 
 #define PL__ALIGN_UP(num, align) (((num) + ((align)-1)) & ~((align)-1))
 
@@ -241,60 +249,60 @@ static inline size_t   pl_align_up(size_t szValue, size_t szAlign)          { re
 // unary ops
 static inline float  pl_length_sqr_vec2  (plVec2 tVec)                             { return pl_squaref(tVec.x) + pl_squaref(tVec.y); }
 static inline float  pl_length_sqr_vec3  (plVec3 tVec)                             { return pl_squaref(tVec.x) + pl_squaref(tVec.y) + pl_squaref(tVec.z); }
-static inline float  pl_length_sqr_vec4  (plVec4 tVec)                             { return pl_squaref(tVec.x) + pl_squaref(tVec.y) + pl_squaref(tVec.z) + pl_squaref(tVec.w); }
-static inline float  pl_length_vec2      (plVec2 tVec)                             { return sqrtf(pl_length_sqr_vec2(tVec)); }
-static inline float  pl_length_vec3      (plVec3 tVec)                             { return sqrtf(pl_length_sqr_vec3(tVec)); }
-static inline float  pl_length_vec4      (plVec4 tVec)                             { return sqrtf(pl_length_sqr_vec4(tVec)); }
+static inline float  pl_length_sqr_vec4  (plVec4 tVec)                             { return _mm_cvtss_f32(_mm_dp_ps(tVec.sse, tVec.sse, 0b11110001)); }
+static inline float  pl_length_vec2      (plVec2 tVec)                             { return pl_sqrt(pl_length_sqr_vec2(tVec)); }
+static inline float  pl_length_vec3      (plVec3 tVec)                             { return pl_sqrt(pl_length_sqr_vec3(tVec)); }
+static inline float  pl_length_vec4      (plVec4 tVec)                             { return _mm_cvtss_f32(_mm_sqrt_ss(_mm_dp_ps(tVec.sse, tVec.sse, 0b11110001))); }
 static inline plVec2 pl_floor_vec2       (plVec2 tVec)                             { return pl_create_vec2(floorf(tVec.x), floorf(tVec.y));}
 static inline plVec3 pl_floor_vec3       (plVec3 tVec)                             { return pl_create_vec3(floorf(tVec.x), floorf(tVec.y), floorf(tVec.z));}
-static inline plVec4 pl_floor_vec4       (plVec4 tVec)                             { return pl_create_vec4(floorf(tVec.x), floorf(tVec.y), floorf(tVec.z), floorf(tVec.w));}
+static inline plVec4 pl_floor_vec4       (plVec4 tVec)                             { plVec4 res;  tVec.sse = _mm_floor_ps(tVec.sse); return res;}
 static inline plVec2 pl_clamp_vec2       (plVec2 tMin, plVec2 tValue, plVec2 tMax) { return pl_create_vec2(pl_clampf(tMin.x, tValue.x, tMax.x), pl_clampf(tMin.y, tValue.y, tMax.y));}
 static inline plVec3 pl_clamp_vec3       (plVec3 tMin, plVec3 tValue, plVec3 tMax) { return pl_create_vec3(pl_clampf(tMin.x, tValue.x, tMax.x), pl_clampf(tMin.y, tValue.y, tMax.y), pl_clampf(tMax.z, tValue.z, tMax.z));}
-static inline plVec4 pl_clamp_vec4       (plVec4 tMin, plVec4 tValue, plVec4 tMax) { return pl_create_vec4(pl_clampf(tMin.x, tValue.x, tMax.x), pl_clampf(tMin.y, tValue.y, tMax.y), pl_clampf(tMax.z, tValue.z, tMax.z), pl_clampf(tMax.w, tValue.w, tMax.w));}
+static inline plVec4 pl_clamp_vec4       (plVec4 tMin, plVec4 tValue, plVec4 tMax) { plVec4 res;  res.sse = _mm_min_ps(_mm_max_ps(tValue.sse, tMin.sse), tMax.sse);  return res;}
 static inline plVec2 pl_min_vec2        (plVec2 tValue0, plVec2 tValue1)           { return pl_create_vec2(pl_minf(tValue0.x, tValue1.x), pl_minf(tValue0.y, tValue1.y));}
 static inline plVec3 pl_min_vec3        (plVec3 tValue0, plVec3 tValue1)           { return pl_create_vec3(pl_minf(tValue0.x, tValue1.x), pl_minf(tValue0.y, tValue1.y), pl_minf(tValue0.z, tValue1.z));}
-static inline plVec4 pl_min_vec4        (plVec4 tValue0, plVec4 tValue1)           { return pl_create_vec4(pl_minf(tValue0.x, tValue1.x), pl_minf(tValue0.y, tValue1.y), pl_minf(tValue0.z, tValue1.z), pl_minf(tValue0.w, tValue1.w));}
+static inline plVec4 pl_min_vec4        (plVec4 tValue0, plVec4 tValue1)           { plVec4 res;  res.sse = _mm_min_ps(tValue0.sse, tValue1.sse);  return res;}
 static inline plVec2 pl_max_vec2        (plVec2 tValue0, plVec2 tValue1)           { return pl_create_vec2(pl_maxf(tValue0.x, tValue1.x), pl_maxf(tValue0.y, tValue1.y));}
 static inline plVec3 pl_max_vec3        (plVec3 tValue0, plVec3 tValue1)           { return pl_create_vec3(pl_maxf(tValue0.x, tValue1.x), pl_maxf(tValue0.y, tValue1.y), pl_maxf(tValue0.z, tValue1.z));}
-static inline plVec4 pl_max_vec4        (plVec4 tValue0, plVec4 tValue1)           { return pl_create_vec4(pl_maxf(tValue0.x, tValue1.x), pl_maxf(tValue0.y, tValue1.y), pl_maxf(tValue0.z, tValue1.z), pl_maxf(tValue0.w, tValue1.w));}
+static inline plVec4 pl_max_vec4        (plVec4 tValue0, plVec4 tValue1)           { plVec4 res;  res.sse = _mm_max_ps(tValue0.sse, tValue1.sse);  return res;}
 
 // binary ops
 static inline float  pl_dot_vec2        (plVec2 tVec1, plVec2 tVec2) { return tVec1.x * tVec2.x + tVec1.y * tVec2.y; }
 static inline float  pl_dot_vec3        (plVec3 tVec1, plVec3 tVec2) { return tVec1.x * tVec2.x + tVec1.y * tVec2.y + tVec1.z * tVec2.z; }
-static inline float  pl_dot_vec4        (plVec4 tVec1, plVec4 tVec2) { return tVec1.x * tVec2.x + tVec1.y * tVec2.y + tVec1.z * tVec2.z + tVec1.w * tVec2.w; }
+static inline float  pl_dot_vec4        (plVec4 tVec1, plVec4 tVec2) { return _mm_cvtss_f32(_mm_dp_ps(tVec1.sse, tVec2.sse, 0b11110001)); }
 static inline plVec3 pl_cross_vec3      (plVec3 tVec1, plVec3 tVec2) { return pl_create_vec3(tVec1.y * tVec2.z - tVec2.y * tVec1.z, tVec1.z * tVec2.x - tVec2.z * tVec1.x, tVec1.x * tVec2.y - tVec2.x * tVec1.y); }
 
 static inline plVec2 pl_add_vec2        (plVec2 tVec1, plVec2 tVec2) { return pl_create_vec2(tVec1.x + tVec2.x, tVec1.y + tVec2.y); }
 static inline plVec3 pl_add_vec3        (plVec3 tVec1, plVec3 tVec2) { return pl_create_vec3(tVec1.x + tVec2.x, tVec1.y + tVec2.y, tVec1.z + tVec2.z); }
-static inline plVec4 pl_add_vec4        (plVec4 tVec1, plVec4 tVec2) { return pl_create_vec4(tVec1.x + tVec2.x, tVec1.y + tVec2.y, tVec1.z + tVec2.z, tVec1.w + tVec2.w); }
+static inline plVec4 pl_add_vec4        (plVec4 tVec1, plVec4 tVec2) { plVec4 res;  res.sse = _mm_add_ps(tVec1.sse, tVec2.sse);  return res; }
 
 static inline plVec2 pl_sub_vec2        (plVec2 tVec1, plVec2 tVec2) { return pl_create_vec2(tVec1.x - tVec2.x, tVec1.y - tVec2.y); }
 static inline plVec3 pl_sub_vec3        (plVec3 tVec1, plVec3 tVec2) { return pl_create_vec3(tVec1.x - tVec2.x, tVec1.y - tVec2.y, tVec1.z - tVec2.z); }
-static inline plVec4 pl_sub_vec4        (plVec4 tVec1, plVec4 tVec2) { return pl_create_vec4(tVec1.x - tVec2.x, tVec1.y - tVec2.y, tVec1.z - tVec2.z, tVec1.w - tVec2.w) ;}
+static inline plVec4 pl_sub_vec4        (plVec4 tVec1, plVec4 tVec2) { plVec4 res;  res.sse = _mm_sub_ps(tVec1.sse, tVec2.sse);  return res;}
 
 static inline plVec2 pl_mul_vec2        (plVec2 tVec1, plVec2 tVec2) { return pl_create_vec2(tVec1.x * tVec2.x, tVec1.y * tVec2.y); }
 static inline plVec3 pl_mul_vec3        (plVec3 tVec1, plVec3 tVec2) { return pl_create_vec3(tVec1.x * tVec2.x, tVec1.y * tVec2.y, tVec1.z * tVec2.z); }
-static inline plVec4 pl_mul_vec4        (plVec4 tVec1, plVec4 tVec2) { return pl_create_vec4(tVec1.x * tVec2.x, tVec1.y * tVec2.y, tVec1.z * tVec2.z, tVec1.w * tVec2.w); }
+static inline plVec4 pl_mul_vec4        (plVec4 tVec1, plVec4 tVec2) { plVec4 res;  res.sse = _mm_mul_ps(tVec1.sse, tVec2.sse);  return res; }
 
 static inline plVec2 pl_div_vec2        (plVec2 tVec1, plVec2 tVec2) { return pl_create_vec2(tVec1.x / tVec2.x, tVec1.y / tVec2.y); }
 static inline plVec3 pl_div_vec3        (plVec3 tVec1, plVec3 tVec2) { return pl_create_vec3(tVec1.x / tVec2.x, tVec1.y / tVec2.y, tVec1.z / tVec2.z); }
-static inline plVec4 pl_div_vec4        (plVec4 tVec1, plVec4 tVec2) { return pl_create_vec4(tVec1.x / tVec2.x, tVec1.y / tVec2.y, tVec1.z / tVec2.z, tVec1.w / tVec2.w); }
+static inline plVec4 pl_div_vec4        (plVec4 tVec1, plVec4 tVec2) { plVec4 res;  res.sse = _mm_div_ps(tVec1.sse, tVec2.sse);  return res; }
 
 static inline plVec2 pl_mul_vec2_scalarf(plVec2 tVec, float fValue)  { return pl_create_vec2(fValue * tVec.x, fValue * tVec.y); }
 static inline plVec3 pl_mul_vec3_scalarf(plVec3 tVec, float fValue)  { return pl_create_vec3(fValue * tVec.x, fValue * tVec.y, fValue * tVec.z); }
-static inline plVec4 pl_mul_vec4_scalarf(plVec4 tVec, float fValue)  { return pl_create_vec4(fValue * tVec.x, fValue * tVec.y, fValue * tVec.z, fValue * tVec.w); }
+static inline plVec4 pl_mul_vec4_scalarf(plVec4 tVec, float fValue)  { plVec4 res;  res.sse = _mm_mul_ps(tVec.sse, _mm_set1_ps(fValue));  return res; }
 
 static inline plVec2 pl_div_vec2_scalarf(plVec2 tVec, float fValue)  { return pl_create_vec2(tVec.x / fValue, tVec.y / fValue); }
 static inline plVec3 pl_div_vec3_scalarf(plVec3 tVec, float fValue)  { return pl_create_vec3(tVec.x / fValue, tVec.y / fValue, tVec.z / fValue); }
-static inline plVec4 pl_div_vec4_scalarf(plVec4 tVec, float fValue)  { return pl_create_vec4(tVec.x / fValue, tVec.y / fValue, tVec.z / fValue, tVec.w / fValue); }
+static inline plVec4 pl_div_vec4_scalarf(plVec4 tVec, float fValue)  { plVec4 res;  res.sse = _mm_div_ps(tVec.sse, _mm_set1_ps(fValue));  return res; }
 
 static inline plVec2 pl_div_scalarf_vec2(float fValue, plVec2 tVec)  { return pl_create_vec2(fValue / tVec.x, fValue / tVec.y); }
 static inline plVec3 pl_div_scalarf_vec3(float fValue, plVec3 tVec)  { return pl_create_vec3(fValue / tVec.x, fValue / tVec.y, fValue / tVec.z); }
-static inline plVec4 pl_div_scalarf_vec4(float fValue, plVec4 tVec)  { return pl_create_vec4(fValue / tVec.x, fValue / tVec.y, fValue / tVec.z, fValue / tVec.w); }
+static inline plVec4 pl_div_scalarf_vec4(float fValue, plVec4 tVec)  { plVec4 res;  res.sse = _mm_div_ps(_mm_set1_ps(fValue), tVec.sse);  return res; }
 
 static inline plVec2 pl_norm_vec2       (plVec2 tVec)                { return pl_div_vec2_scalarf(tVec, pl_length_vec2(tVec)); }
 static inline plVec3 pl_norm_vec3       (plVec3 tVec)                { return pl_div_vec3_scalarf(tVec, pl_length_vec3(tVec)); }
-static inline plVec4 pl_norm_vec4       (plVec4 tVec)                { return pl_div_vec4_scalarf(tVec, pl_length_vec4(tVec)); }
+static inline plVec4 pl_norm_vec4       (plVec4 tVec)                { plVec4 res;  res.sse = _mm_div_ps(tVec.sse, _mm_sqrt_ps(_mm_dp_ps(tVec.sse, tVec.sse, 0b11111111)));  return res; }
 
 //-----------------------------------------------------------------------------
 // [SECTION] matrix ops
@@ -304,9 +312,9 @@ static inline plVec4 pl_norm_vec4       (plVec4 tVec)                { return pl
 static inline float  pl_mat4_get                  (const plMat4* ptMat, int iRow, int iCol)         { return ptMat->col[iCol].d[iRow];}
 static inline void   pl_mat4_set                  (plMat4* ptMat, int iRow, int iCol, float fValue) { ptMat->col[iCol].d[iRow] = fValue;}
 static inline plMat4 pl_identity_mat4             (void)                                            { return pl_create_mat4_diag(1.0f, 1.0f, 1.0f, 1.0f);}
-static inline plMat4 pl_mat4_transpose            (const plMat4* ptMat)                             { plMat4 tResult = {0}; for (int i = 0; i < 4; i++) for (int j = 0; j < 4; j++) pl_mat4_set(&tResult, i, j, pl_mat4_get(ptMat, j, i)); return tResult;}
+static inline plMat4 pl_mat4_transpose            (const plMat4* ptMat);
 static inline plMat4 pl_mat4_invert               (const plMat4* ptMat);
-static inline plMat4 pl_mul_scalarf_mat4          (float fLeft, const plMat4* ptRight)              { plMat4 tResult = {0}; for (int i = 0; i < 4; i++) for (int j = 0; j < 4; j++) pl_mat4_set(&tResult, i, j, fLeft * pl_mat4_get(ptRight, j, i)); return tResult;}
+static inline plMat4 pl_mul_scalarf_mat4          (float fLeft, const plMat4* ptRight);
 static inline plVec3 pl_mul_mat4_vec3             (const plMat4* ptLeft, plVec3 tRight);
 static inline plVec4 pl_mul_mat4_vec4             (const plMat4* ptLeft, plVec4 tRight);
 static inline plMat4 pl_mul_mat4                  (const plMat4* ptLeft, const plMat4* ptRight);
@@ -365,66 +373,48 @@ static inline plRect pl_rect_move_start_y  (const plRect* ptRect, float fY)     
 static inline plVec3
 pl_mul_mat4_vec3(const plMat4* ptLeft, plVec3 tRight) 
 {
-    const plVec4 Mov0 = { tRight.x, tRight.x, tRight.x, tRight.x };
-    const plVec4 Mov1 = { tRight.y, tRight.y, tRight.y, tRight.y };
-    const plVec4 Mul0 = pl_mul_vec4(ptLeft->col[0], Mov0);
-    const plVec4 Mul1 = pl_mul_vec4(ptLeft->col[1], Mov1);
-    const plVec4 Add0 = pl_add_vec4(Mul0, Mul1);
-    const plVec4 Mov2 = { tRight.z, tRight.z, tRight.z, tRight.z };
-    const plVec4 Mov3 = { 1.0f, 1.0f, 1.0f, 1.0f };
-    const plVec4 Mul2 = pl_mul_vec4(ptLeft->col[2], Mov2);
-    const plVec4 Mul3 = pl_mul_vec4(ptLeft->col[3], Mov3);
-    const plVec4 Add1 = pl_add_vec4(Mul2, Mul3);
-    const plVec4 Add2 = pl_add_vec4(Add0, Add1);
-    return pl_create_vec3(Add2.x, Add2.y, Add2.z );    
+    plVec4 Mov0;  Mov0.sse = _mm_set1_ps(tRight.x);
+    plVec4 Mov1;  Mov1.sse = _mm_set1_ps(tRight.y);
+    plVec4 Mov2;  Mov2.sse = _mm_set1_ps(tRight.z);
+    plVec4 Mov3;  Mov3.sse = _mm_set1_ps(1);
+    plVec4 Mul0;  Mul0.sse = _mm_mul_ps(ptLeft->sse_col[0], Mov0.sse);
+    plVec4 Mul1;  Mul1.sse = _mm_mul_ps(ptLeft->sse_col[1], Mov1.sse);
+    plVec4 Mul2;  Mul2.sse = _mm_mul_ps(ptLeft->sse_col[2], Mov2.sse);
+    plVec4 Mul3;  Mul3.sse = _mm_mul_ps(ptLeft->sse_col[3], Mov3.sse);
+    plVec4 Add0;  Add0.sse = _mm_add_ps(Mul0.sse, Mul1.sse);
+    plVec4 Add1;  Add1.sse = _mm_add_ps(Mul2.sse, Mul3.sse);
+    plVec4 Add2;  Add2.sse = _mm_add_ps(Add0.sse, Add1.sse);
+    return pl_create_vec3(Add2.x, Add2.y, Add2.z);
 }
 
 static inline plVec4
 pl_mul_mat4_vec4(const plMat4* ptLeft, plVec4 tRight) 
 {
-    const plVec4 Mov0 = { tRight.x, tRight.x, tRight.x, tRight.x };
-    const plVec4 Mov1 = { tRight.y, tRight.y, tRight.y, tRight.y };
-    const plVec4 Mul0 = pl_mul_vec4(ptLeft->col[0], Mov0);
-    const plVec4 Mul1 = pl_mul_vec4(ptLeft->col[1], Mov1);
-    const plVec4 Add0 = pl_add_vec4(Mul0, Mul1);
-    const plVec4 Mov2 = { tRight.z, tRight.z, tRight.z, tRight.z };
-    const plVec4 Mov3 = { tRight.w, tRight.w, tRight.w, tRight.w };
-    const plVec4 Mul2 = pl_mul_vec4(ptLeft->col[2], Mov2);
-    const plVec4 Mul3 = pl_mul_vec4(ptLeft->col[3], Mov3);
-    const plVec4 Add1 = pl_add_vec4(Mul2, Mul3);
-    return pl_add_vec4(Add0, Add1);
+    plVec4 Mov0;  Mov0.sse = _mm_set1_ps(tRight.x);
+    plVec4 Mov1;  Mov1.sse = _mm_set1_ps(tRight.y);
+    plVec4 Mov2;  Mov2.sse = _mm_set1_ps(tRight.z);
+    plVec4 Mov3;  Mov3.sse = _mm_set1_ps(tRight.w);
+    plVec4 Mul0;  Mul0.sse = _mm_mul_ps(ptLeft->sse_col[0], Mov0.sse);
+    plVec4 Mul1;  Mul1.sse = _mm_mul_ps(ptLeft->sse_col[1], Mov1.sse);
+    plVec4 Mul2;  Mul2.sse = _mm_mul_ps(ptLeft->sse_col[2], Mov2.sse);
+    plVec4 Mul3;  Mul3.sse = _mm_mul_ps(ptLeft->sse_col[3], Mov3.sse);
+    plVec4 Add0;  Add0.sse = _mm_add_ps(Mul0.sse, Mul1.sse);
+    plVec4 Add1;  Add1.sse = _mm_add_ps(Mul2.sse, Mul3.sse);
+    plVec4 Add2;  Add2.sse = _mm_add_ps(Add0.sse, Add1.sse);
+    return Add2;
 }
 
 static inline plMat4
 pl_mul_mat4(const plMat4* ptLeft, const plMat4* ptRight)
 {
-    plMat4 tResult;
-
-    // row 0
-    tResult.x11 = ptLeft->col[0].d[0] * ptRight->col[0].d[0] + ptLeft->col[1].d[0] * ptRight->col[0].d[1] + ptLeft->col[2].d[0] * ptRight->col[0].d[2] + ptLeft->col[3].d[0] * ptRight->col[0].d[3];
-    tResult.x12 = ptLeft->col[0].d[0] * ptRight->col[1].d[0] + ptLeft->col[1].d[0] * ptRight->col[1].d[1] + ptLeft->col[2].d[0] * ptRight->col[1].d[2] + ptLeft->col[3].d[0] * ptRight->col[1].d[3];
-    tResult.x13 = ptLeft->col[0].d[0] * ptRight->col[2].d[0] + ptLeft->col[1].d[0] * ptRight->col[2].d[1] + ptLeft->col[2].d[0] * ptRight->col[2].d[2] + ptLeft->col[3].d[0] * ptRight->col[2].d[3];
-    tResult.x14 = ptLeft->col[0].d[0] * ptRight->col[3].d[0] + ptLeft->col[1].d[0] * ptRight->col[3].d[1] + ptLeft->col[2].d[0] * ptRight->col[3].d[2] + ptLeft->col[3].d[0] * ptRight->col[3].d[3];
-
-    // row 1
-    tResult.x21 = ptLeft->col[0].d[1] * ptRight->col[0].d[0] + ptLeft->col[1].d[1] * ptRight->col[0].d[1] + ptLeft->col[2].d[1] * ptRight->col[0].d[2] + ptLeft->col[3].d[1] * ptRight->col[0].d[3];
-    tResult.x22 = ptLeft->col[0].d[1] * ptRight->col[1].d[0] + ptLeft->col[1].d[1] * ptRight->col[1].d[1] + ptLeft->col[2].d[1] * ptRight->col[1].d[2] + ptLeft->col[3].d[1] * ptRight->col[1].d[3];
-    tResult.x23 = ptLeft->col[0].d[1] * ptRight->col[2].d[0] + ptLeft->col[1].d[1] * ptRight->col[2].d[1] + ptLeft->col[2].d[1] * ptRight->col[2].d[2] + ptLeft->col[3].d[1] * ptRight->col[2].d[3];
-    tResult.x24 = ptLeft->col[0].d[1] * ptRight->col[3].d[0] + ptLeft->col[1].d[1] * ptRight->col[3].d[1] + ptLeft->col[2].d[1] * ptRight->col[3].d[2] + ptLeft->col[3].d[1] * ptRight->col[3].d[3];
-
-    // row 2
-    tResult.x31 = ptLeft->col[0].d[2] * ptRight->col[0].d[0] + ptLeft->col[1].d[2] * ptRight->col[0].d[1] + ptLeft->col[2].d[2] * ptRight->col[0].d[2] + ptLeft->col[3].d[2] * ptRight->col[0].d[3];
-    tResult.x32 = ptLeft->col[0].d[2] * ptRight->col[1].d[0] + ptLeft->col[1].d[2] * ptRight->col[1].d[1] + ptLeft->col[2].d[2] * ptRight->col[1].d[2] + ptLeft->col[3].d[2] * ptRight->col[1].d[3];
-    tResult.x33 = ptLeft->col[0].d[2] * ptRight->col[2].d[0] + ptLeft->col[1].d[2] * ptRight->col[2].d[1] + ptLeft->col[2].d[2] * ptRight->col[2].d[2] + ptLeft->col[3].d[2] * ptRight->col[2].d[3];
-    tResult.x34 = ptLeft->col[0].d[2] * ptRight->col[3].d[0] + ptLeft->col[1].d[2] * ptRight->col[3].d[1] + ptLeft->col[2].d[2] * ptRight->col[3].d[2] + ptLeft->col[3].d[2] * ptRight->col[3].d[3];
-
-    // row 3
-    tResult.x41 = ptLeft->col[0].d[3] * ptRight->col[0].d[0] + ptLeft->col[1].d[3] * ptRight->col[0].d[1] + ptLeft->col[2].d[3] * ptRight->col[0].d[2] + ptLeft->col[3].d[3] * ptRight->col[0].d[3];
-    tResult.x42 = ptLeft->col[0].d[3] * ptRight->col[1].d[0] + ptLeft->col[1].d[3] * ptRight->col[1].d[1] + ptLeft->col[2].d[3] * ptRight->col[1].d[2] + ptLeft->col[3].d[3] * ptRight->col[1].d[3];
-    tResult.x43 = ptLeft->col[0].d[3] * ptRight->col[2].d[0] + ptLeft->col[1].d[3] * ptRight->col[2].d[1] + ptLeft->col[2].d[3] * ptRight->col[2].d[2] + ptLeft->col[3].d[3] * ptRight->col[2].d[3];
-    tResult.x44 = ptLeft->col[0].d[3] * ptRight->col[3].d[0] + ptLeft->col[1].d[3] * ptRight->col[3].d[1] + ptLeft->col[2].d[3] * ptRight->col[3].d[2] + ptLeft->col[3].d[3] * ptRight->col[3].d[3];
-
-    return tResult;
+    plMat4 temp = pl_mat4_transpose(ptLeft);
+    
+    plMat4 res;
+    res.sse_col[0] = _mm_or_ps(_mm_or_ps(_mm_dp_ps(temp.sse_col[0], ptRight->sse_col[0], 0b11110001), _mm_dp_ps(temp.sse_col[1], ptRight->sse_col[0], 0b11110010)), _mm_or_ps(_mm_dp_ps(temp.sse_col[2], ptRight->sse_col[0], 0b11110100), _mm_dp_ps(temp.sse_col[3], ptRight->sse_col[0], 0b11111000)));
+    res.sse_col[0] = _mm_or_ps(_mm_or_ps(_mm_dp_ps(temp.sse_col[0], ptRight->sse_col[1], 0b11110001), _mm_dp_ps(temp.sse_col[1], ptRight->sse_col[1], 0b11110010)), _mm_or_ps(_mm_dp_ps(temp.sse_col[2], ptRight->sse_col[1], 0b11110100), _mm_dp_ps(temp.sse_col[3], ptRight->sse_col[1], 0b11111000)));
+    res.sse_col[0] = _mm_or_ps(_mm_or_ps(_mm_dp_ps(temp.sse_col[0], ptRight->sse_col[2], 0b11110001), _mm_dp_ps(temp.sse_col[1], ptRight->sse_col[2], 0b11110010)), _mm_or_ps(_mm_dp_ps(temp.sse_col[2], ptRight->sse_col[2], 0b11110100), _mm_dp_ps(temp.sse_col[3], ptRight->sse_col[2], 0b11111000)));
+    res.sse_col[0] = _mm_or_ps(_mm_or_ps(_mm_dp_ps(temp.sse_col[0], ptRight->sse_col[3], 0b11110001), _mm_dp_ps(temp.sse_col[1], ptRight->sse_col[3], 0b11110010)), _mm_or_ps(_mm_dp_ps(temp.sse_col[2], ptRight->sse_col[3], 0b11110100), _mm_dp_ps(temp.sse_col[3], ptRight->sse_col[3], 0b11111000)));
+    return res;
 }
 
 static inline plMat4
@@ -452,11 +442,21 @@ pl_mat4_rotate_vec3(float fAngle, plVec3 tVec)
         0.0f
     };
 
-    return pl_create_mat4_cols(
-        pl_add_vec4(pl_mul_vec4_scalarf(tM.col[0], tRotate.col[0].d[0]), pl_add_vec4(pl_mul_vec4_scalarf(tM.col[1], tRotate.col[0].d[1]), pl_mul_vec4_scalarf(tM.col[2], tRotate.col[0].d[2]))),
-        pl_add_vec4(pl_mul_vec4_scalarf(tM.col[0], tRotate.col[1].d[0]), pl_add_vec4(pl_mul_vec4_scalarf(tM.col[1], tRotate.col[1].d[1]), pl_mul_vec4_scalarf(tM.col[2], tRotate.col[1].d[2]))),
-        pl_add_vec4(pl_mul_vec4_scalarf(tM.col[0], tRotate.col[2].d[0]), pl_add_vec4(pl_mul_vec4_scalarf(tM.col[1], tRotate.col[2].d[1]), pl_mul_vec4_scalarf(tM.col[2], tRotate.col[2].d[2]))),
-        tM.col[3]); 
+    plMat4 res;
+    res.sse_col[0] = _mm_add_ps(_mm_mul_ps(tM.sse_col[0], _mm_set1_ps(tRotate.col[0].d[0])), _mm_add_ps(_mm_mul_ps(tM.sse_col[1], _mm_set1_ps(tRotate.col[0].d[1])), _mm_mul_ps(tM.sse_col[2], _mm_set1_ps(tRotate.col[0].d[2]))));
+    res.sse_col[1] = _mm_add_ps(_mm_mul_ps(tM.sse_col[0], _mm_set1_ps(tRotate.col[1].d[0])), _mm_add_ps(_mm_mul_ps(tM.sse_col[1], _mm_set1_ps(tRotate.col[1].d[1])), _mm_mul_ps(tM.sse_col[2], _mm_set1_ps(tRotate.col[1].d[2]))));
+    res.sse_col[2] = _mm_add_ps(_mm_mul_ps(tM.sse_col[0], _mm_set1_ps(tRotate.col[2].d[0])), _mm_add_ps(_mm_mul_ps(tM.sse_col[1], _mm_set1_ps(tRotate.col[2].d[1])), _mm_mul_ps(tM.sse_col[2], _mm_set1_ps(tRotate.col[2].d[2]))));
+    res.col[3] = tM.col[3];
+    return res;
+}
+
+static inline plMat4 pl_mat4_transpose(const plMat4* ptMat){
+    plMat4 res;
+    res.sse_col[0] = _mm_setr_ps(ptMat->x11, ptMat->x12, ptMat->x13, ptMat->x14);
+    res.sse_col[1] = _mm_setr_ps(ptMat->x21, ptMat->x22, ptMat->x23, ptMat->x24);
+    res.sse_col[2] = _mm_setr_ps(ptMat->x31, ptMat->x32, ptMat->x33, ptMat->x34);
+    res.sse_col[3] = _mm_setr_ps(ptMat->x41, ptMat->x42, ptMat->x43, ptMat->x44);
+    return res;
 }
 
 static inline plMat4
@@ -508,6 +508,16 @@ pl_mat4_invert(const plMat4* ptMat)
     return tResult;
 }
 
+static inline plMat4 pl_mul_scalarf_mat4 (float fLeft, const plMat4* ptRight){
+    plMat4 res;
+    __m128 s = _mm_set1_ps(fLeft);
+    res.sse_col[0] = _mm_mul_ps(s, ptRight->sse_col[0]);
+    res.sse_col[1] = _mm_mul_ps(s, ptRight->sse_col[1]);
+    res.sse_col[2] = _mm_mul_ps(s, ptRight->sse_col[2]);
+    res.sse_col[3] = _mm_mul_ps(s, ptRight->sse_col[3]);
+    return res;
+}
+
 static inline plMat4
 pl_rotation_translation_scale(plVec4 tQ, plVec3 tV, plVec3 tS)
 {
@@ -549,7 +559,7 @@ pl_rotation_translation_scale(plVec4 tQ, plVec3 tV, plVec3 tS)
 static inline plMat4
 pl_mul_mat4t(const plMat4* ptLeft, const plMat4* ptRight)
 {
-    plMat4 tResult = pl_create_mat4_diag(0.0f, 0.0f, 0.0f, 1.0f);
+    plMat4 tResult = {0};
 
     // row 0
     tResult.x11 = ptLeft->x11 * ptRight->x11 + ptLeft->x12 * ptRight->x21 + ptLeft->x13 * ptRight->x31;
@@ -568,6 +578,9 @@ pl_mul_mat4t(const plMat4* ptLeft, const plMat4* ptRight)
     tResult.x32 = ptLeft->x31 * ptRight->x12 + ptLeft->x32 * ptRight->x22 + ptLeft->x33 * ptRight->x32;
     tResult.x33 = ptLeft->x31 * ptRight->x13 + ptLeft->x32 * ptRight->x23 + ptLeft->x33 * ptRight->x33;
     tResult.x34 = ptLeft->x31 * ptRight->x14 + ptLeft->x32 * ptRight->x24 + ptLeft->x33 * ptRight->x34 + ptLeft->x34;
+    
+    // row 3
+    tResult.x44 = 1;
 
     return tResult;
 }
@@ -611,4 +624,4 @@ pl_mat4t_invert(const plMat4* ptMat)
     return tResult;
 }
 
-#endif // PL_MATH_INCLUDE_FUNCTIONS
+#endif // PL_MATH_IMPLEMENTATION

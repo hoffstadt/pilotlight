@@ -25,7 +25,7 @@ Index of this file:
 #include "pl_os.h"
 #include "pl_memory.h"
 
-#define PL_MATH_INCLUDE_FUNCTIONS
+#define PL_MATH_IMPLEMENTATION
 #include "pl_math.h"
 
 // extensions

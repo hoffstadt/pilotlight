@@ -22,7 +22,7 @@ Index of this file:
 #include "pl_vulkan.h"
 #include "pl_ds.h"
 
-#define PL_MATH_INCLUDE_FUNCTIONS
+#define PL_MATH_IMPLEMENTATION
 #include "pl_math.h"
 
 #ifndef PL_VULKAN

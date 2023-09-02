@@ -28,7 +28,7 @@ Index of this file:
 #include "pl_ds.h"
 #include "pl_string.h"
 
-#define PL_MATH_INCLUDE_FUNCTIONS
+#define PL_MATH_IMPLEMENTATION
 #include "pl_math.h"
 
 #ifdef PL_METAL_BACKEND

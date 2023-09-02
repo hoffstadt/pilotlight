@@ -16,7 +16,7 @@ Index of this file:
 // [SECTION] includes
 //-----------------------------------------------------------------------------
 
-#define PL_MATH_INCLUDE_FUNCTIONS
+#define PL_MATH_IMPLEMENTATION
 #include "pilotlight.h"
 #include "pl_ecs_ext.h"
 #include "pl_ds.h"

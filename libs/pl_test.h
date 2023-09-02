@@ -81,6 +81,15 @@ bool pl_test_expect_double_near_not_equal(double dValue0, double dValue1, double
 bool pl_test_expect_string_equal    (const char* pcValue0, const char* pcValue1, const char* pcMsg);
 bool pl_test_expect_string_not_equal(const char* pcValue0, const char* pcValue1, const char* pcMsg);
 
+#ifdef PL_MATH_INC
+// math
+bool pl_test_expect_vec2_equal(plVec2 v1, plVec2 v2, const char* pcMsg);
+bool pl_test_expect_vec3_equal(plVec3 v1, plVec3 v2, const char* pcMsg);
+bool pl_test_expect_vec4_equal(plVec4 v1, plVec4 v2, const char* pcMsg);
+bool pl_test_expect_mat4_equal(plMat4 m1, plMat4 v2, const char* pcMsg);
+bool pl_test_expect_rect_equal(plRect r1, plRect r2, const char* pcMsg);
+#endif
+
 #endif // PL_TEST_H
 
 //-----------------------------------------------------------------------------
@@ -356,6 +365,73 @@ pl_test_expect_string_not_equal(const char* pcValue0, const char* pcValue1, cons
     pl__test_print_red("\"%s\" does not equal \"%s\" | Equality Not Expected", pcMsg, pcValue0, pcValue1);
     return true;   
 }
+#ifdef PL_MATH_INC
+bool pl_test_expect_vec2_equal(plVec2 v1, plVec2 v2, const char* pcMsg){
+    if(v1.d[0] == v2.d[0] && v1.d[1] && v2.d[1]){
+        pl__test_print_green("(%.6f, %.6f) equals (%.6f, %.6f) | Equality Expected", pcMsg, v1.d[0], v1.d[1], v2.d[0], v2.d[1]);
+        return true;
+    }
+
+    pl__test_print_red("(%.6f, %.6f) does not equal (%.6f, %.6f) | Equality Not Expected", pcMsg, v1.d[0], v1.d[1], v2.d[0], v2.d[1]);
+    gptTestContext->ptCurrentTest->bFailureOccured = true;
+    return false;
+}
+bool pl_test_expect_vec3_equal(plVec3 v1, plVec3 v2, const char* pcMsg){
+    if(v1.d[0] == v2.d[0] && v1.d[1] == v2.d[1] && v1.d[2] == v2.d[2]){
+        pl__test_print_green("(%.6f, %.6f, %.6f) equals (%.6f, %.6f, %.6f) | Equality Expected", pcMsg, v1.d[0], v1.d[1], v1.d[2], v2.d[0], v2.d[1], v2.d[2]);
+        return true;
+    }
+
+    pl__test_print_red("(%.6f, %.6f, %.6f) does not equal (%.6f, %.6f, %.6f) | Equality Not Expected", pcMsg, v1.d[0], v1.d[1], v1.d[2], v2.d[0], v2.d[1], v2.d[2]);
+    gptTestContext->ptCurrentTest->bFailureOccured = true;
+    return false;
+}
+bool pl_test_expect_vec4_equal(plVec4 v1, plVec4 v2, const char* pcMsg){
+    if(v1.d[0] == v2.d[0] && v1.d[1] == v2.d[1] && v1.d[2] == v2.d[2] && v1.d[3] == v2.d[3]){
+        pl__test_print_green("(%.6f, %.6f, %.6f, %.6f) equals (%.6f, %.6f, %.6f, %.6f) | Equality Expected", pcMsg, v1.d[0], v1.d[1], v1.d[2], v1.d[3], v2.d[0], v2.d[1], v2.d[2], v2.d[3]);
+        return true;
+    }
+
+    pl__test_print_red("(%.6f, %.6f, %.6f, %.6f) does not equal (%.6f, %.6f, %.6f, %.6f) | Equality Not Expected", pcMsg, v1.d[0], v1.d[1], v1.d[2], v1.d[3], v2.d[0], v2.d[1], v2.d[2], v2.d[3]);
+    gptTestContext->ptCurrentTest->bFailureOccured = true;
+    return false;
+}
+bool pl_test_expect_mat4_equal(plMat4 m1, plMat4 m2, const char* pcMsg){
+    // Note(Quattro) lazy check
+    bool matrix_are_equals = true;
+    for(int i = 0; i < 16; i++){
+        if(m1.d[i] != m2.d[i]){
+            matrix_are_equals = false;
+            break;
+        }
+    }
+    // Note(Quattro) i should do some lazy prints, but i was too lazy to do them
+    if(matrix_are_equals){
+        pl__test_print_green("|%.6f, %.6f, %.6f, %.6f|\n|%.6f, %.6f, %.6f, %.6f|\n|%.6f, %.6f, %.6f, %.6f|\n|%.6f, %.6f, %.6f, %.6f|\n", NULL, m1.d[0], m1.d[1], m1.d[2], m1.d[3], m1.d[4], m1.d[5], m1.d[6], m1.d[7], m1.d[8], m1.d[9], m1.d[10], m1.d[11], m1.d[12], m1.d[13], m1.d[14], m1.d[15]);
+        pl__test_print_green("equals\n", NULL);
+        pl__test_print_green("|%.6f, %.6f, %.6f, %.6f|\n|%.6f, %.6f, %.6f, %.6f|\n|%.6f, %.6f, %.6f, %.6f|\n|%.6f, %.6f, %.6f, %.6f|\n", NULL, m2.d[0], m2.d[1], m2.d[2], m2.d[3], m2.d[4], m2.d[5], m2.d[6], m2.d[7], m2.d[8], m2.d[9], m2.d[10], m2.d[11], m2.d[12], m2.d[13], m2.d[14], m2.d[15]);
+        pl__test_print_green("Equality Expected", pcMsg);
+        return true;
+    }
+    pl__test_print_red("|%.6f, %.6f, %.6f, %.6f|\n|%.6f, %.6f, %.6f, %.6f|\n|%.6f, %.6f, %.6f, %.6f|\n|%.6f, %.6f, %.6f, %.6f|\n", NULL, m1.d[0], m1.d[1], m1.d[2], m1.d[3], m1.d[4], m1.d[5], m1.d[6], m1.d[7], m1.d[8], m1.d[9], m1.d[10], m1.d[11], m1.d[12], m1.d[13], m1.d[14], m1.d[15]);
+    pl__test_print_red("does not equals\n", NULL);
+    pl__test_print_red("|%.6f, %.6f, %.6f, %.6f|\n|%.6f, %.6f, %.6f, %.6f|\n|%.6f, %.6f, %.6f, %.6f|\n|%.6f, %.6f, %.6f, %.6f|\n", NULL, m2.d[0], m2.d[1], m2.d[2], m2.d[3], m2.d[4], m2.d[5], m2.d[6], m2.d[7], m2.d[8], m2.d[9], m2.d[10], m2.d[11], m2.d[12], m2.d[13], m2.d[14], m2.d[15]);
+    pl__test_print_red("Equality Not Expected", pcMsg);
+    
+    gptTestContext->ptCurrentTest->bFailureOccured = true;
+    return false;
+}
+bool pl_test_expect_rect_equal(plRect r1, plRect r2, const char* pcMsg){
+    if(r1.tMin.d[0] == r2.tMin.d[0] && r1.tMin.d[1] == r2.tMin.d[1] && r1.tMax.d[0] == r2.tMax.d[0] && r1.tMax.d[1] == r2.tMax.d[1]){
+        pl__test_print_green("((%.6f, %.6f), (%.6f, %.6f)) equals ((%.6f, %.6f), (%.6f, %.6f)) | Equality Expected", pcMsg, r1.tMin.d[0], r1.tMin.d[1], r1.tMax.d[0], r1.tMax.d[1], r2.tMin.d[0], r2.tMin.d[1], r2.tMax.d[0], r2.tMax.d[1]);
+        return true;
+    }
+
+    pl__test_print_red("((%.6f, %.6f), (%.6f, %.6f)) does not equal ((%.6f, %.6f), (%.6f, %.6f)) | Equality Not Expected", pcMsg, r1.tMin.d[0], r1.tMin.d[1], r1.tMax.d[0], r1.tMax.d[1], r2.tMin.d[0], r2.tMin.d[1], r2.tMax.d[0], r2.tMax.d[1]);
+    gptTestContext->ptCurrentTest->bFailureOccured = true;
+    return false;
+}
+#endif
 
 //-----------------------------------------------------------------------------
 // [SECTION] internal api implementation
