@@ -63,6 +63,8 @@ Index of this file:
 LRESULT CALLBACK pl__windows_procedure     (HWND tHwnd, UINT tMsg, WPARAM tWParam, LPARAM tLParam);
 void             pl__convert_to_wide_string(const char* narrowValue, wchar_t* wideValue);
 void             pl__render_frame          (void);
+void             pl__lock_frame_rate_at    (float target_fps);
+int64_t          pl__read_os_timer         ();
 void             pl_update_mouse_cursor    (void);
 inline bool      pl__is_vk_down            (int iVk) { return (GetKeyState(iVk) & 0x8000) != 0;}
 plKey            pl__virtual_key_to_pl_key (WPARAM tWParam);
@@ -656,16 +658,35 @@ pl__convert_to_wide_string(const char* pcNarrowValue, wchar_t* pwWideValue)
 void
 pl__render_frame(void)
 {
-    // setup time step
-    INT64 ilCurrentTime = 0;
-    QueryPerformanceCounter((LARGE_INTEGER*)&ilCurrentTime);
-    gptIOCtx->fDeltaTime = (float)(ilCurrentTime - ilTime) / ilTicksPerSecond;
-    ilTime = ilCurrentTime;
+    pl__lock_frame_rate_at(60);
     if(!gptIOCtx->bViewportMinimized)
     {
         pl_app_update(gpUserData);
         gptExtensionRegistry->reload();
     }
+}
+
+void pl__lock_frame_rate_at(float target_fps) {
+    float target_ms = 1 / target_fps;
+    float seconds_elapsed_for_frame = ((float)(pl__read_os_timer() - ilTime)) / ilTicksPerSecond;
+    if (seconds_elapsed_for_frame < target_ms) {
+        float sleep_ms = (1000 * target_ms - seconds_elapsed_for_frame) / 1000;
+        if (sleep_ms > 0) {
+            pl__sleep((uint32_t)sleep_ms);
+        }
+        while (seconds_elapsed_for_frame < target_ms) {
+            seconds_elapsed_for_frame = ((float)(pl__read_os_timer() - ilTime)) / ilTicksPerSecond;
+        }
+    }
+    int64_t end_counter = pl__read_os_timer();
+    gptIOCtx->fDeltaTime = ((float)(end_counter - ilTime)) / ilTicksPerSecond;
+    ilTime = end_counter;
+}
+
+int64_t pl__read_os_timer() {
+    int64_t out;
+    QueryPerformanceCounter((LARGE_INTEGER*)&out);
+    return out;
 }
 
 void
