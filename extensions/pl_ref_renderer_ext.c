@@ -92,13 +92,23 @@ typedef struct _DynamicData
 
 typedef struct _plRefView
 {
+    plRenderPassHandle       tDrawingRenderPass;
     plRenderPassHandle       tRenderPass;
     plVec2                   tTargetSize;
     plTextureHandle          tTexture;
     plTextureViewHandle      tTextureView;
+    plTextureHandle          tAlbedoTexture;
+    plTextureViewHandle      tAlbedoTextureView;
+    plTextureHandle          tPositionTexture;
+    plTextureViewHandle      tPositionTextureView;
+    plTextureHandle          tNormalTexture;
+    plTextureViewHandle      tNormalTextureView;
     plTextureHandle          tDepthTexture;
     plTextureViewHandle      tDepthTextureView;
     plTextureId              tTextureID;
+
+    // lighting
+    plBindGroupHandle tLightingBindGroup;
 
     // GPU buffers
     plBufferHandle atGlobalBuffers[2];
@@ -113,10 +123,14 @@ typedef struct _plRefView
 typedef struct _plRefScene
 {
 
+    plRenderPassLayoutHandle tDrawingRenderPassLayout;
     plRenderPassLayoutHandle tRenderPassLayout;
 
     // shader templates
     plShaderHandle tShader;
+
+    // lighting
+    plDrawable tLightingDrawable;
 
     // skybox
     plDrawable          tSkyboxDrawable;
@@ -162,6 +176,7 @@ typedef struct _plRefRendererData
 
     // shaders
     plShaderHandle tSkyboxShader;
+    plShaderHandle tLightingShader;
 
     // compute shaders
     plComputeShaderHandle tPanoramaShader;
@@ -287,6 +302,7 @@ pl_refr_initialize(void)
 
     // shader default values
     gptData->tSkyboxShader    = (plShaderHandle){UINT32_MAX, UINT32_MAX};
+    gptData->tLightingShader  = (plShaderHandle){UINT32_MAX, UINT32_MAX};
 
     // compute shader default values
     gptData->tPanoramaShader = (plComputeShaderHandle){UINT32_MAX, UINT32_MAX};
@@ -401,21 +417,45 @@ pl_refr_create_scene(void)
 
     // create offscreen render pass layout
     const plRenderPassLayoutDescription tRenderPassLayoutDesc = {
-        .tDepthTargetFormat = PL_FORMAT_D32_FLOAT_S8_UINT,
-        .atColorTargets = {
-            { .tFormat = PL_FORMAT_R32G32B32A32_FLOAT }
+        .atRenderTargets = {
+            { .tFormat = PL_FORMAT_D32_FLOAT_S8_UINT },  // depth buffer
+            { .tFormat = PL_FORMAT_R32G32B32A32_FLOAT }, // final output
+            { .tFormat = PL_FORMAT_R32G32B32A32_FLOAT }, // albedo
+            { .tFormat = PL_FORMAT_R32G32B32A32_FLOAT }, // normal
+            { .tFormat = PL_FORMAT_R32G32B32A32_FLOAT }, // position
         },
-        .uSubpassCount = 1,
+        .uSubpassCount = 2,
         .atSubpasses = {
             {
-                .uRenderTargetCount = 1,
-                .auRenderTargets = {0},
+                .uRenderTargetCount = 4,
+                .auRenderTargets = {0, 2, 3, 4},
                 .uSubpassInputCount = 0,
-                .bDepthTarget = true
+            },
+            {
+                .uRenderTargetCount = 1,
+                .auRenderTargets = {1},
+                .uSubpassInputCount = 4,
+                .auSubpassInputs = {0, 2, 3, 4},
             }
         }
     };
     ptScene->tRenderPassLayout = gptDevice->create_render_pass_layout(&gptData->tGraphics.tDevice, &tRenderPassLayoutDesc);
+
+    const plRenderPassLayoutDescription tDrawingRenderPassLayoutDesc = {
+        .atRenderTargets = {
+            { .tFormat = PL_FORMAT_D32_FLOAT_S8_UINT },
+            { .tFormat = PL_FORMAT_R32G32B32A32_FLOAT },
+        },
+        .uSubpassCount = 1,
+        .atSubpasses = {
+            {
+                .uRenderTargetCount = 2,
+                .auRenderTargets = {0, 1},
+                .uSubpassInputCount = 0,
+            }
+        }
+    };
+    ptScene->tDrawingRenderPassLayout = gptDevice->create_render_pass_layout(&gptData->tGraphics.tDevice, &tDrawingRenderPassLayoutDesc);
 
     // create template shader
     plShaderDescription tShaderDescription = {
@@ -596,6 +636,76 @@ pl_refr_create_view(uint32_t uSceneHandle, plVec2 tDimensions)
     };
     gptData->tSkyboxShader = gptDevice->create_shader(&ptGraphics->tDevice, &tSkyboxShaderDesc);
 
+    // create lighting shader
+    plShaderDescription tLightingShaderDesc = {
+#ifdef PL_METAL_BACKEND
+        .pcVertexShader = "../shaders/metal/lighting.metal",
+        .pcPixelShader = "../shaders/metal/lighting.metal",
+        .pcVertexShaderEntryFunc = "vertex_main",
+        .pcPixelShaderEntryFunc = "fragment_main",
+#else
+        .pcVertexShader = "lighting.vert.spv",
+        .pcPixelShader = "lighting.frag.spv",
+        .pcVertexShaderEntryFunc = "main",
+        .pcPixelShaderEntryFunc = "main",
+#endif
+
+        .tGraphicsState = {
+            .ulDepthWriteEnabled  = 0,
+            .ulVertexStreamMask   = PL_MESH_FORMAT_FLAG_HAS_POSITION,
+            .ulBlendMode          = PL_BLEND_MODE_NONE,
+            .ulDepthMode          = PL_COMPARE_MODE_ALWAYS,
+            .ulCullMode           = PL_CULL_MODE_NONE,
+            .ulStencilMode        = PL_COMPARE_MODE_ALWAYS,
+            .ulStencilRef         = 0xff,
+            .ulStencilMask        = 0xff,
+            .ulStencilOpFail      = PL_STENCIL_OP_KEEP,
+            .ulStencilOpDepthFail = PL_STENCIL_OP_KEEP,
+            .ulStencilOpPass      = PL_STENCIL_OP_KEEP
+        },
+        .uSubpassIndex = 1,
+        .tRenderPassLayout = ptScene->tRenderPassLayout,
+        .uBindGroupLayoutCount = 3,
+        .atBindGroupLayouts = {
+            {
+                .uBufferCount  = 3,
+                .aBuffers = {
+                    {
+                        .tType = PL_BUFFER_BINDING_TYPE_UNIFORM,
+                        .uSlot = 0,
+                        .tStages = PL_STAGE_VERTEX | PL_STAGE_PIXEL
+                    },
+                    {
+                        .tType = PL_BUFFER_BINDING_TYPE_STORAGE,
+                        .uSlot = 1,
+                        .tStages = PL_STAGE_VERTEX | PL_STAGE_PIXEL
+                    },
+                    {
+                        .tType = PL_BUFFER_BINDING_TYPE_STORAGE,
+                        .uSlot = 2,
+                        .tStages = PL_STAGE_VERTEX | PL_STAGE_PIXEL
+                    },
+                }
+            },
+            {
+                .uTextureCount = 4,
+                .aTextures = {
+                    { .uSlot = 0, .tStages = PL_STAGE_VERTEX | PL_STAGE_PIXEL},
+                    { .uSlot = 1, .tStages = PL_STAGE_VERTEX | PL_STAGE_PIXEL},
+                    { .uSlot = 2, .tStages = PL_STAGE_VERTEX | PL_STAGE_PIXEL},
+                    { .uSlot = 3, .tStages = PL_STAGE_VERTEX | PL_STAGE_PIXEL}
+                 },
+            },
+            {
+                .uTextureCount = 1,
+                .aTextures = {
+                    { .uSlot = 0, .tStages = PL_STAGE_VERTEX | PL_STAGE_PIXEL}
+                 },
+            }
+        }
+    };
+    gptData->tLightingShader = gptDevice->create_shader(&ptGraphics->tDevice, &tLightingShaderDesc);
+
     // create offscreen color & depth textures
     const plTextureDesc tTextureDesc = {
         .tDimensions = {ptView->tTargetSize.x, ptView->tTargetSize.y, 1},
@@ -606,6 +716,9 @@ pl_refr_create_view(uint32_t uSceneHandle, plVec2 tDimensions)
         .tUsage      = PL_TEXTURE_USAGE_SAMPLED | PL_TEXTURE_USAGE_COLOR_ATTACHMENT
     };
     ptView->tTexture = gptDevice->create_texture(&ptGraphics->tDevice, tTextureDesc, "offscreen texture");
+    ptView->tAlbedoTexture = gptDevice->create_texture(&ptGraphics->tDevice, tTextureDesc, "albedo texture");
+    ptView->tNormalTexture = gptDevice->create_texture(&ptGraphics->tDevice, tTextureDesc, "normal texture");
+    ptView->tPositionTexture = gptDevice->create_texture(&ptGraphics->tDevice, tTextureDesc, "position texture");
 
     const plTextureDesc tDepthTextureDesc = {
         .tDimensions = {ptView->tTargetSize.x, ptView->tTargetSize.y, 1},
@@ -613,7 +726,7 @@ pl_refr_create_view(uint32_t uSceneHandle, plVec2 tDimensions)
         .uLayers     = 1,
         .uMips       = 1,
         .tType       = PL_TEXTURE_TYPE_2D,
-        .tUsage      = PL_TEXTURE_USAGE_DEPTH_STENCIL_ATTACHMENT
+        .tUsage      = PL_TEXTURE_USAGE_DEPTH_STENCIL_ATTACHMENT | PL_TEXTURE_USAGE_SAMPLED
     };
     ptView->tDepthTexture = gptDevice->create_texture(&ptGraphics->tDevice, tDepthTextureDesc, "offscreen depth texture");
 
@@ -640,15 +753,34 @@ pl_refr_create_view(uint32_t uSceneHandle, plVec2 tDimensions)
         .tHorizontalWrap = PL_WRAP_MODE_CLAMP
     };
     ptView->tTextureView = gptDevice->create_texture_view(&ptGraphics->tDevice, &tTextureViewDesc, &tSampler, ptView->tTexture, "offscreen texture view");
+    ptView->tAlbedoTextureView = gptDevice->create_texture_view(&ptGraphics->tDevice, &tTextureViewDesc, &tSampler, ptView->tAlbedoTexture, "albedo texture view");
+    ptView->tNormalTextureView = gptDevice->create_texture_view(&ptGraphics->tDevice, &tTextureViewDesc, &tSampler, ptView->tNormalTexture, "normal texture view");
+    ptView->tPositionTextureView = gptDevice->create_texture_view(&ptGraphics->tDevice, &tTextureViewDesc, &tSampler, ptView->tPositionTexture, "position texture view");
     ptView->tTextureID = gptGfx->get_ui_texture_handle(ptGraphics, ptView->tTextureView);
     ptView->tDepthTextureView = gptDevice->create_texture_view(&ptGraphics->tDevice, &tDepthTextureViewDesc, &tSampler, ptView->tDepthTexture, "offscreen depth texture view");
+
+    plBindGroupLayout tLightingBindGroupLayout = {
+        .uTextureCount  = 4,
+        .aTextures = { 
+            {.uSlot = 0, .tStages = PL_STAGE_PIXEL | PL_STAGE_VERTEX},
+            {.uSlot = 1, .tStages = PL_STAGE_PIXEL | PL_STAGE_VERTEX},
+            {.uSlot = 2, .tStages = PL_STAGE_PIXEL | PL_STAGE_VERTEX},
+            {.uSlot = 3, .tStages = PL_STAGE_PIXEL | PL_STAGE_VERTEX},
+        }
+    };
+    ptView->tLightingBindGroup = gptDevice->create_bind_group(&ptGraphics->tDevice, &tLightingBindGroupLayout);
+    plTextureViewHandle atLightingTextureViews[] = {ptView->tAlbedoTextureView, ptView->tNormalTextureView, ptView->tPositionTextureView, ptView->tDepthTextureView};
+    gptDevice->update_bind_group(&ptGraphics->tDevice, &ptView->tLightingBindGroup, 0, NULL, NULL, 4, atLightingTextureViews);
 
     // create offscreen render pass
     const plRenderPassAttachments atAttachmentSets[] = {
         {
             .atViewAttachments = {
                 ptView->tDepthTextureView,
-                ptView->tTextureView
+                ptView->tTextureView,
+                ptView->tAlbedoTextureView,
+                ptView->tNormalTextureView,
+                ptView->tPositionTextureView,
             }
         }
     };
@@ -660,20 +792,66 @@ pl_refr_create_view(uint32_t uSceneHandle, plVec2 tDimensions)
                 .tStoreOp        = PL_STORE_OP_DONT_CARE,
                 .tStencilLoadOp  = PL_LOAD_OP_CLEAR,
                 .tStencilStoreOp = PL_STORE_OP_DONT_CARE,
-                .tNextUsage      = PL_TEXTURE_LAYOUT_DEPTH_STENCIL,
+                .tCurrentUsage   = PL_TEXTURE_USAGE_DEPTH_STENCIL_ATTACHMENT,
+                .tNextUsage      = PL_TEXTURE_USAGE_DEPTH_STENCIL_ATTACHMENT,
                 .fClearZ         = 1.0f
         },
         .atColorTargets = {
             {
-                .tLoadOp     = PL_LOAD_OP_CLEAR,
-                .tStoreOp    = PL_STORE_OP_STORE,
-                .tNextUsage  = PL_TEXTURE_LAYOUT_SHADER_READ,
-                .tClearColor = {0.0f, 0.0f, 0.0f, 1.0f}
+                .tLoadOp       = PL_LOAD_OP_CLEAR,
+                .tStoreOp      = PL_STORE_OP_STORE,
+                .tCurrentUsage = PL_TEXTURE_USAGE_SAMPLED,
+                .tNextUsage    = PL_TEXTURE_USAGE_SAMPLED,
+                .tClearColor   = {0.0f, 0.0f, 0.0f, 1.0f}
+            },
+            {
+                .tLoadOp       = PL_LOAD_OP_CLEAR,
+                .tStoreOp      = PL_STORE_OP_STORE,
+                .tCurrentUsage = PL_TEXTURE_USAGE_SAMPLED,
+                .tNextUsage    = PL_TEXTURE_USAGE_SAMPLED,
+                .tClearColor   = {0.0f, 0.0f, 0.0f, 1.0f}
+            },
+            {
+                .tLoadOp       = PL_LOAD_OP_CLEAR,
+                .tStoreOp      = PL_STORE_OP_STORE,
+                .tCurrentUsage = PL_TEXTURE_USAGE_SAMPLED,
+                .tNextUsage    = PL_TEXTURE_USAGE_SAMPLED,
+                .tClearColor   = {0.0f, 0.0f, 0.0f, 1.0f}
+            },
+            {
+                .tLoadOp       = PL_LOAD_OP_CLEAR,
+                .tStoreOp      = PL_STORE_OP_STORE,
+                .tCurrentUsage = PL_TEXTURE_USAGE_SAMPLED,
+                .tNextUsage    = PL_TEXTURE_USAGE_SAMPLED,
+                .tClearColor   = {0.0f, 0.0f, 0.0f, 1.0f}
             }
         },
         .tDimensions = {.x = ptView->tTargetSize.x, .y = ptView->tTargetSize.y}
     };
     ptView->tRenderPass = gptDevice->create_render_pass(&ptGraphics->tDevice, &tRenderPassDesc, atAttachmentSets);
+    const plRenderPassDescription tDrawingRenderPassDesc = {
+        .tLayout = ptScene->tDrawingRenderPassLayout,
+        .tDepthTarget = {
+                .tLoadOp         = PL_LOAD_OP_LOAD,
+                .tStoreOp        = PL_STORE_OP_DONT_CARE,
+                .tStencilLoadOp  = PL_LOAD_OP_CLEAR,
+                .tStencilStoreOp = PL_STORE_OP_DONT_CARE,
+                .tCurrentUsage   = PL_TEXTURE_USAGE_DEPTH_STENCIL_ATTACHMENT,
+                .tNextUsage      = PL_TEXTURE_USAGE_DEPTH_STENCIL_ATTACHMENT,
+                .fClearZ         = 1.0f
+        },
+        .atColorTargets = {
+            {
+                .tLoadOp       = PL_LOAD_OP_LOAD,
+                .tStoreOp      = PL_STORE_OP_STORE,
+                .tCurrentUsage = PL_TEXTURE_USAGE_SAMPLED,
+                .tNextUsage    = PL_TEXTURE_USAGE_SAMPLED,
+                .tClearColor   = {0.0f, 0.0f, 0.0f, 1.0f}
+            }
+        },
+        .tDimensions = {.x = ptView->tTargetSize.x, .y = ptView->tTargetSize.y}
+    };
+    ptView->tDrawingRenderPass = gptDevice->create_render_pass(&ptGraphics->tDevice, &tDrawingRenderPassDesc, atAttachmentSets);
 
 
     // register debug 3D drawlist
@@ -686,6 +864,36 @@ pl_refr_create_view(uint32_t uSceneHandle, plVec2 tDimensions)
     };
     ptView->atGlobalBuffers[0] = gptDevice->create_buffer(&ptGraphics->tDevice, &atGlobalBuffersDesc, "global buffer 0");
     ptView->atGlobalBuffers[1] = gptDevice->create_buffer(&ptGraphics->tDevice, &atGlobalBuffersDesc, "global buffer 1");
+
+    const uint32_t uStartIndex2     = pl_sb_size(ptScene->sbtVertexPosBuffer);
+    const uint32_t uIndexStart2     = pl_sb_size(ptScene->sbuIndexBuffer);
+    const uint32_t uDataStartIndex2 = pl_sb_size(ptScene->sbtVertexDataBuffer);
+
+    const plDrawable tDrawable2 = {
+        .uIndexCount   = 6,
+        .uVertexCount  = 4,
+        .uIndexOffset  = uIndexStart2,
+        .uVertexOffset = uStartIndex2,
+        .uDataOffset   = uDataStartIndex2,
+    };
+    ptScene->tLightingDrawable = tDrawable2;
+
+    pl_sb_push(ptScene->sbuIndexBuffer, uStartIndex2 + 0);
+    pl_sb_push(ptScene->sbuIndexBuffer, uStartIndex2 + 1);
+    pl_sb_push(ptScene->sbuIndexBuffer, uStartIndex2 + 2);
+    pl_sb_push(ptScene->sbuIndexBuffer, uStartIndex2 + 0);
+    pl_sb_push(ptScene->sbuIndexBuffer, uStartIndex2 + 2);
+    pl_sb_push(ptScene->sbuIndexBuffer, uStartIndex2 + 3);
+
+    pl_sb_push(ptScene->sbtVertexPosBuffer, ((plVec3){-1.0f, -1.0f}));
+    pl_sb_push(ptScene->sbtVertexPosBuffer, ((plVec3){-1.0f,  1.0f}));
+    pl_sb_push(ptScene->sbtVertexPosBuffer, ((plVec3){1.0f,  1.0f}));
+    pl_sb_push(ptScene->sbtVertexPosBuffer, ((plVec3){1.0f,  -1.0f}));
+
+    pl_sb_push(ptScene->sbtVertexDataBuffer, ((plVec4){ 0.0f, 0.0f})); 
+    pl_sb_push(ptScene->sbtVertexDataBuffer, ((plVec4){ 0.0f, 1.0f})); 
+    pl_sb_push(ptScene->sbtVertexDataBuffer, ((plVec4){ 1.0f, 1.0f})); 
+    pl_sb_push(ptScene->sbtVertexDataBuffer, ((plVec4){ 1.0f, 0.0f})); 
 
     return uViewHandle;
 }
@@ -704,8 +912,14 @@ pl_refr_resize_view(uint32_t uSceneHandle, uint32_t uViewHandle, plVec2 tDimensi
 
     // queue old textures & texture views for deletion
     gptDevice->queue_texture_view_for_deletion(ptDevice, ptView->tTextureView);
+    gptDevice->queue_texture_view_for_deletion(ptDevice, ptView->tAlbedoTextureView);
+    gptDevice->queue_texture_view_for_deletion(ptDevice, ptView->tNormalTextureView);
+    gptDevice->queue_texture_view_for_deletion(ptDevice, ptView->tPositionTextureView);
     gptDevice->queue_texture_view_for_deletion(ptDevice, ptView->tDepthTextureView);
     gptDevice->queue_texture_for_deletion(ptDevice, ptView->tTexture);
+    gptDevice->queue_texture_for_deletion(ptDevice, ptView->tAlbedoTexture);
+    gptDevice->queue_texture_for_deletion(ptDevice, ptView->tNormalTexture);
+    gptDevice->queue_texture_for_deletion(ptDevice, ptView->tPositionTexture);
     gptDevice->queue_texture_for_deletion(ptDevice, ptView->tDepthTexture);
 
     // recreate offscreen color & depth textures
@@ -718,6 +932,9 @@ pl_refr_resize_view(uint32_t uSceneHandle, uint32_t uViewHandle, plVec2 tDimensi
         .tUsage      = PL_TEXTURE_USAGE_SAMPLED | PL_TEXTURE_USAGE_COLOR_ATTACHMENT
     };
     ptView->tTexture = gptDevice->create_texture(&ptGraphics->tDevice, tOffscreenTextureDesc, "offscreen texture");
+    ptView->tAlbedoTexture = gptDevice->create_texture(&ptGraphics->tDevice, tOffscreenTextureDesc, "albedo texture");
+    ptView->tNormalTexture = gptDevice->create_texture(&ptGraphics->tDevice, tOffscreenTextureDesc, "normal texture");
+    ptView->tPositionTexture = gptDevice->create_texture(&ptGraphics->tDevice, tOffscreenTextureDesc, "position texture");
 
     const plTextureDesc tOffscreenDepthTextureDesc = {
         .tDimensions = {ptView->tTargetSize.x, ptView->tTargetSize.y, 1},
@@ -725,7 +942,7 @@ pl_refr_resize_view(uint32_t uSceneHandle, uint32_t uViewHandle, plVec2 tDimensi
         .uLayers     = 1,
         .uMips       = 1,
         .tType       = PL_TEXTURE_TYPE_2D,
-        .tUsage      = PL_TEXTURE_USAGE_DEPTH_STENCIL_ATTACHMENT
+        .tUsage      = PL_TEXTURE_USAGE_DEPTH_STENCIL_ATTACHMENT | PL_TEXTURE_USAGE_SAMPLED
     };
     ptView->tDepthTexture = gptDevice->create_texture(&ptGraphics->tDevice, tOffscreenDepthTextureDesc, "offscreen depth texture");
 
@@ -752,20 +969,30 @@ pl_refr_resize_view(uint32_t uSceneHandle, uint32_t uViewHandle, plVec2 tDimensi
         .tHorizontalWrap = PL_WRAP_MODE_CLAMP
     };
     ptView->tTextureView = gptDevice->create_texture_view(&ptGraphics->tDevice, &tOffscreenTextureViewDesc, &tOffscreenSampler, ptView->tTexture, "offscreen texture view");
+    ptView->tAlbedoTextureView = gptDevice->create_texture_view(&ptGraphics->tDevice, &tOffscreenTextureViewDesc, &tOffscreenSampler, ptView->tAlbedoTexture, "albedo texture view");
+    ptView->tNormalTextureView = gptDevice->create_texture_view(&ptGraphics->tDevice, &tOffscreenTextureViewDesc, &tOffscreenSampler, ptView->tNormalTexture, "normal texture view");
+    ptView->tPositionTextureView = gptDevice->create_texture_view(&ptGraphics->tDevice, &tOffscreenTextureViewDesc, &tOffscreenSampler, ptView->tPositionTexture, "position texture view");
     ptView->tTextureID = gptGfx->get_ui_texture_handle(ptGraphics, ptView->tTextureView);
     ptView->tDepthTextureView = gptDevice->create_texture_view(&ptGraphics->tDevice, &tOffscreenDepthTextureViewDesc, &tOffscreenSampler, ptView->tDepthTexture, "offscreen depth texture view");
+
+    plTextureViewHandle atLightingTextureViews[] = {ptView->tAlbedoTextureView, ptView->tNormalTextureView, ptView->tPositionTextureView, ptView->tDepthTextureView};
+    gptDevice->update_bind_group(&ptGraphics->tDevice, &ptView->tLightingBindGroup, 0, NULL, NULL, 4, atLightingTextureViews);
 
     // update offscreen render pass attachments
     const plRenderPassAttachments atOffscreenAttachmentSets[] = {
         {
             .atViewAttachments = {
                 ptView->tDepthTextureView,
-                ptView->tTextureView
+                ptView->tTextureView,
+                ptView->tAlbedoTextureView,
+                ptView->tNormalTextureView,
+                ptView->tPositionTextureView
                 
             }
         }
     };
     gptDevice->update_render_pass_attachments(ptDevice, ptView->tRenderPass, ptView->tTargetSize, atOffscreenAttachmentSets);
+    gptDevice->update_render_pass_attachments(ptDevice, ptView->tDrawingRenderPass, ptView->tTargetSize, atOffscreenAttachmentSets);
 }
 
 static void
@@ -2655,7 +2882,6 @@ pl_refr_render_scene(plCommandBuffer tCommandBuffer, uint32_t uSceneHandle, uint
 
     if(ptScene->tSkyboxTexture.uIndex != UINT32_MAX)
     {
-
         plDynamicBinding tSkyboxDynamicData = gptDevice->allocate_dynamic_data(ptDevice, sizeof(plMat4));
         plMat4* ptSkyboxDynamicData = (plMat4*)tSkyboxDynamicData.pcData;
         *ptSkyboxDynamicData = pl_mat4_translate_vec3(ptCamera->tPos);
@@ -2677,7 +2903,7 @@ pl_refr_render_scene(plCommandBuffer tCommandBuffer, uint32_t uSceneHandle, uint
         });
     }
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~visible meshes~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~    
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~visible meshes~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     static double* pdVisibleObjects = NULL;
     if(!pdVisibleObjects)
@@ -2737,6 +2963,36 @@ pl_refr_render_scene(plCommandBuffer tCommandBuffer, uint32_t uSceneHandle, uint
     plRenderEncoder tEncoder = gptGfx->begin_render_pass(ptGraphics, &tCommandBuffer, ptView->tRenderPass);
     gptGfx->draw_subpass(&tEncoder, 1, &tArea);
 
+    gptStream->reset(ptStream);
+    gptGfx->next_subpass(&tEncoder);
+
+    typedef struct _plLightingDynamicData{
+        int iDataOffset;
+        int iVertexOffset;
+        int unused[2];
+    } plLightingDynamicData;
+    plDynamicBinding tLightingDynamicData = gptDevice->allocate_dynamic_data(ptDevice, sizeof(plLightingDynamicData));
+    plLightingDynamicData* ptLightingDynamicData = (plLightingDynamicData*)tLightingDynamicData.pcData;
+    ptLightingDynamicData->iDataOffset = ptScene->tLightingDrawable.uDataOffset;
+    ptLightingDynamicData->iVertexOffset = ptScene->tLightingDrawable.uVertexOffset;
+
+    gptStream->draw(ptStream, (plDraw)
+    {
+        .uShaderVariant       = gptData->tLightingShader.uIndex,
+        .uDynamicBuffer       = tLightingDynamicData.uBufferHandle,
+        .uVertexBuffer        = ptScene->tVertexBuffer.uIndex,
+        .uIndexBuffer         = ptScene->tIndexBuffer.uIndex,
+        .uIndexOffset         = ptScene->tLightingDrawable.uIndexOffset,
+        .uTriangleCount       = 2,
+        .uBindGroup0          = tGlobalBG.uIndex,
+        .uBindGroup1          = ptView->tLightingBindGroup.uIndex,
+        .uBindGroup2          = gptData->tNullSkinBindgroup.uIndex,
+        .uDynamicBufferOffset = tLightingDynamicData.uByteOffset,
+        .uInstanceStart       = 0,
+        .uInstanceCount       = 1
+    });
+    gptGfx->draw_subpass(&tEncoder, 1, &tArea);
+
     if(tOptions.bShowAllBoundingBoxes)
     {
         for(uint32_t i = 0; i < uDrawableCount; i++)
@@ -2768,6 +3024,10 @@ pl_refr_render_scene(plCommandBuffer tCommandBuffer, uint32_t uSceneHandle, uint
     }
 
     const plMat4 tMVP = pl_mul_mat4(&ptCamera->tProjMat, &ptCamera->tViewMat);
+    gptGfx->end_render_pass(&tEncoder);
+    
+    
+    tEncoder = gptGfx->begin_render_pass(ptGraphics, &tCommandBuffer, ptView->tDrawingRenderPass);
     gptGfx->submit_3d_drawlist(&ptView->t3DDrawList, tEncoder, tDimensions.x, tDimensions.y, &tMVP, PL_PIPELINE_FLAG_DEPTH_TEST | PL_PIPELINE_FLAG_DEPTH_WRITE, 1);
 
     gptGfx->end_render_pass(&tEncoder);

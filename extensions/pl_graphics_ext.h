@@ -48,8 +48,8 @@ Index of this file:
     #define PL_MAX_SHADER_SPECIALIZATION_CONSTANTS 64
 #endif
 
-#ifndef PL_MAX_COLOR_TARGETS
-    #define PL_MAX_COLOR_TARGETS 16
+#ifndef PL_MAX_RENDER_TARGETS
+    #define PL_MAX_RENDER_TARGETS 16
 #endif
 
 #ifndef PL_FRAMES_IN_FLIGHT
@@ -143,7 +143,8 @@ typedef struct _plBeginCommandInfo         plBeginCommandInfo;
 typedef struct _plSubmitInfo               plSubmitInfo;
 
 // render passes
-typedef struct _plColorTarget                plColorTarget;
+typedef struct _plRenderTarget                plRenderTarget;
+typedef struct _plColorTarget                 plColorTarget;
 typedef struct _plDepthTarget                 plDepthTarget;
 typedef struct _plSubpass                     plSubpass;
 typedef struct _plRenderPassLayout            plRenderPassLayout;
@@ -195,7 +196,6 @@ typedef int plMemoryMode;             // -> enum _plMemoryMode             // En
 typedef int plLoadOperation;          // -> enum _plLoadOperation          // Enum:
 typedef int plLoadOp;                 // -> enum _plLoadOp                 // Enum:
 typedef int plStoreOp;                // -> enum _plStoreOp                // Enum:
-typedef int plTextureLayout;          // -> enum _plTextureLayout          // Enum:
 
 // external
 typedef struct _plDrawList plDrawList;
@@ -382,7 +382,7 @@ typedef struct _plGraphicsState
             uint64_t ulDepthMode          :  4; // PL_DEPTH_MODE_
             uint64_t ulWireframe          :  1; // bool
             uint64_t ulDepthWriteEnabled  :  1; // bool
-            uint64_t ulCullMode           :  2; // VK_CULL_MODE_*
+            uint64_t ulCullMode           :  2; // PL_CULL_MODE_*
             uint64_t ulBlendMode          :  3; // PL_BLEND_MODE_*
             uint64_t ulStencilMode        :  4;
             uint64_t ulStencilRef         :  8;
@@ -702,42 +702,25 @@ typedef struct _plComputeShader
     plComputeShaderHandle*     _sbtVariantHandles; // needed for cleanup
 } plComputeShader;
 
-typedef struct _plDepthTarget
-{
-    plFormat            tFormat;
-    plLoadOp            tLoadOp;
-    plStoreOp           tStoreOp;
-    plLoadOp            tStencilLoadOp;
-    plStoreOp           tStencilStoreOp;
-    plTextureLayout     tNextUsage;
-    float               fClearZ;
-    uint32_t            uClearStencil;
-} plDepthTarget;
-
-typedef struct _plColorTarget
-{
-    plFormat        tFormat;
-    plLoadOp        tLoadOp;
-    plStoreOp       tStoreOp;
-    plTextureLayout tNextUsage;
-    plVec4          tClearColor;
-} plColorTarget;
-
 typedef struct _plSubpass
 {
     uint32_t uRenderTargetCount;
     uint32_t uSubpassInputCount;
-    uint32_t auRenderTargets[PL_MAX_COLOR_TARGETS];
-    uint32_t auSubpassInputs[PL_MAX_COLOR_TARGETS];
-    bool     bDepthTarget;
+    uint32_t auRenderTargets[PL_MAX_RENDER_TARGETS];
+    uint32_t auSubpassInputs[PL_MAX_RENDER_TARGETS];
+    bool _bHasDepth;
 } plSubpass;
+
+typedef struct _plRenderTarget
+{
+    plFormat tFormat;
+} plRenderTarget;
 
 typedef struct _plRenderPassLayoutDescription
 {
-    plFormat      tDepthTargetFormat;
-    uint32_t      uSubpassCount;
-    plColorTarget atColorTargets[PL_MAX_COLOR_TARGETS];
-    plSubpass     atSubpasses[PL_MAX_SUBPASSES];
+    uint32_t       uSubpassCount;
+    plRenderTarget atRenderTargets[PL_MAX_RENDER_TARGETS];
+    plSubpass      atSubpasses[PL_MAX_SUBPASSES];
 } plRenderPassLayoutDescription;
 
 typedef struct _plRenderPassLayout
@@ -750,13 +733,34 @@ typedef struct _plRenderPassLayout
 
 typedef struct _plRenderPassAttachments
 {
-    plTextureViewHandle atViewAttachments[PL_MAX_COLOR_TARGETS];
+    plTextureViewHandle atViewAttachments[PL_MAX_RENDER_TARGETS];
 } plRenderPassAttachments;
+
+typedef struct _plDepthTarget
+{
+    plLoadOp            tLoadOp;
+    plStoreOp           tStoreOp;
+    plLoadOp            tStencilLoadOp;
+    plStoreOp           tStencilStoreOp;
+    plTextureUsage      tCurrentUsage;
+    plTextureUsage      tNextUsage;
+    float               fClearZ;
+    uint32_t            uClearStencil;
+} plDepthTarget;
+
+typedef struct _plColorTarget
+{
+    plLoadOp        tLoadOp;
+    plStoreOp       tStoreOp;
+    plTextureUsage  tCurrentUsage;
+    plTextureUsage  tNextUsage;
+    plVec4          tClearColor;
+} plColorTarget;
 
 typedef struct _plRenderPassDescription
 {
     plRenderPassLayoutHandle tLayout;
-    plColorTarget            atColorTargets[PL_MAX_COLOR_TARGETS];
+    plColorTarget            atColorTargets[PL_MAX_RENDER_TARGETS];
     plDepthTarget            tDepthTarget;
     plVec2                   tDimensions;
 } plRenderPassDescription;
@@ -962,16 +966,8 @@ enum _plTextureUsage
     PL_TEXTURE_USAGE_SAMPLED                  = 1 << 0,
     PL_TEXTURE_USAGE_COLOR_ATTACHMENT         = 1 << 1,
     PL_TEXTURE_USAGE_DEPTH_STENCIL_ATTACHMENT = 1 << 2,
-    PL_TEXTURE_USAGE_TRANSIENT_ATTACHMENT     = 1 << 3
-};
-
-enum _plTextureLayout
-{
-    PL_TEXTURE_LAYOUT_NONE,
-    PL_TEXTURE_LAYOUT_RENDER_TARGET,
-    PL_TEXTURE_LAYOUT_DEPTH_STENCIL,
-    PL_TEXTURE_LAYOUT_PRESENT,
-    PL_TEXTURE_LAYOUT_SHADER_READ,
+    PL_TEXTURE_USAGE_TRANSIENT_ATTACHMENT     = 1 << 3,
+    PL_TEXTURE_USAGE_PRESENT                  = 1 << 4
 };
 
 enum _plBlendMode

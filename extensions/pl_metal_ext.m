@@ -325,7 +325,7 @@ pl_create_render_pass_layout(plDevice* ptDevice, const plRenderPassLayoutDescrip
     if(ptDesc->tDepthTargetFormat != PL_FORMAT_UNKNOWN)
         uAttachmentCount = 1;
 
-    for(uint32_t i = 0; i < PL_MAX_COLOR_TARGETS; i++)
+    for(uint32_t i = 0; i < PL_MAX_RENDER_TARGETS; i++)
     {
         if(ptDesc->atColorTargets[i].tFormat == PL_FORMAT_UNKNOWN)
             break;

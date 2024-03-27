@@ -264,7 +264,8 @@ static VkFilter                            pl__vulkan_filter    (plFilter tFilte
 static VkSamplerAddressMode                pl__vulkan_wrap      (plWrapMode tWrap);
 static VkCompareOp                         pl__vulkan_compare   (plCompareMode tCompare);
 static VkFormat                            pl__vulkan_format    (plFormat tFormat);
-static VkImageLayout                       pl__vulkan_layout    (plTextureLayout tLayout);
+static bool                                pl__is_depth_format  (plFormat tFormat);
+static VkImageLayout                       pl__vulkan_layout    (plTextureUsage tUsage);
 static VkAttachmentLoadOp                  pl__vulkan_load_op   (plLoadOp tOp);
 static VkAttachmentStoreOp                 pl__vulkan_store_op  (plStoreOp tOp);
 static VkCullModeFlags                     pl__vulkan_cull      (plCullMode tFlag);
@@ -988,7 +989,7 @@ pl_create_texture(plDevice* ptDevice, plTextureDesc tDesc, const char* pcName)
 
     VkImageUsageFlags tUsageFlags = 0;
     if(tDesc.tUsage & PL_TEXTURE_USAGE_SAMPLED)
-        tUsageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        tUsageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
     if(tDesc.tUsage & PL_TEXTURE_USAGE_COLOR_ATTACHMENT)
         tUsageFlags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     if(tDesc.tUsage & PL_TEXTURE_USAGE_DEPTH_STENCIL_ATTACHMENT)
@@ -1060,12 +1061,12 @@ pl_create_texture(plDevice* ptDevice, plTextureDesc tDesc, const char* pcName)
         .aspectMask     = tImageAspectFlags
     };
 
-    if(tDesc.tUsage & PL_TEXTURE_USAGE_SAMPLED)
+    if(tDesc.tUsage & PL_TEXTURE_USAGE_DEPTH_STENCIL_ATTACHMENT)
+        pl__transition_image_layout(tCommandBuffer, tVulkanTexture.tImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, tRange, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    else if(tDesc.tUsage & PL_TEXTURE_USAGE_SAMPLED)
         pl__transition_image_layout(tCommandBuffer, tVulkanTexture.tImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, tRange, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
     else if(tDesc.tUsage & PL_TEXTURE_USAGE_COLOR_ATTACHMENT)
         pl__transition_image_layout(tCommandBuffer, tVulkanTexture.tImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, tRange, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    else if(tDesc.tUsage & PL_TEXTURE_USAGE_DEPTH_STENCIL_ATTACHMENT)
-        pl__transition_image_layout(tCommandBuffer, tVulkanTexture.tImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, tRange, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
     PL_VULKAN(vkEndCommandBuffer(tCommandBuffer));
     const VkSubmitInfo tSubmitInfo = {
@@ -1922,11 +1923,13 @@ pl_get_shader_variant(plDevice* ptDevice, plShaderHandle tHandle, const plShader
     //---------------------------------------------------------------------
 
     const plRenderPassLayout* ptRenderPassLayout = &ptGraphics->sbtRenderPassLayoutsCold[ptShader->tDescription.tRenderPassLayout.uIndex];
-    VkPipelineColorBlendAttachmentState atColorBlendAttachment[PL_MAX_COLOR_TARGETS] = {0};
+    VkPipelineColorBlendAttachmentState atColorBlendAttachment[PL_MAX_RENDER_TARGETS] = {0};
 
-    uint32_t uColorAttachmentCount = ptRenderPassLayout->_uAttachmentCount;
-    if(ptRenderPassLayout->tDesc.tDepthTargetFormat != PL_FORMAT_UNKNOWN)
+    uint32_t uColorAttachmentCount = ptRenderPassLayout->tDesc.atSubpasses[ptShader->tDescription.uSubpassIndex].uRenderTargetCount;
+
+    if(ptRenderPassLayout->tDesc.atSubpasses[ptShader->tDescription.uSubpassIndex]._bHasDepth)
         uColorAttachmentCount--;
+        
     for(uint32_t j = 0; j < uColorAttachmentCount; j++)
     {
         if(j == 0)
@@ -2288,10 +2291,13 @@ pl_create_shader(plDevice* ptDevice, const plShaderDescription* ptDescription)
         // color blending stage
         //---------------------------------------------------------------------
 
-        VkPipelineColorBlendAttachmentState atColorBlendAttachment[PL_MAX_COLOR_TARGETS] = {0};
-        uint32_t uColorAttachmentCount = ptRenderPassLayout->_uAttachmentCount;
-        if(ptRenderPassLayout->tDesc.tDepthTargetFormat != PL_FORMAT_UNKNOWN)
+        VkPipelineColorBlendAttachmentState atColorBlendAttachment[PL_MAX_RENDER_TARGETS] = {0};
+
+        uint32_t uColorAttachmentCount = ptRenderPassLayout->tDesc.atSubpasses[ptDescription->uSubpassIndex].uRenderTargetCount;
+
+        if(ptRenderPassLayout->tDesc.atSubpasses[ptDescription->uSubpassIndex]._bHasDepth)
             uColorAttachmentCount--;
+
         for(uint32_t j = 0; j < uColorAttachmentCount; j++)
         {
             if(j == 0)
@@ -2401,9 +2407,8 @@ pl_create_main_render_pass_layout(plDevice* ptDevice)
 
     plRenderPassLayout tLayout = {
         .tDesc = {
-            .atColorTargets = {
+            .atRenderTargets = {
                 {
-                    .tClearColor = {0.0f, 0.0f, 0.0f, 1.0f},
                     .tFormat = ptGraphics->tSwapchain.tFormat,
                 }
             }
@@ -2579,70 +2584,136 @@ pl_create_render_pass_layout(plDevice* ptDevice, const plRenderPassLayoutDescrip
         .uIndex = uResourceIndex
     };
 
-    VkAttachmentDescription atAttachments[PL_MAX_COLOR_TARGETS] = {0};
+    plRenderPassLayout tLayout = {
+        .tDesc = *ptDesc
+    };
+
+    VkAttachmentDescription atAttachments[PL_MAX_RENDER_TARGETS] = {0};
+
+    uint32_t uDependencyCount = 2;
     
-    // find attachment count & fill out references & descriptions
-    const uint32_t uAttachmentOffset = ptDesc->tDepthTargetFormat == PL_FORMAT_UNKNOWN ? 0 : 1;
-    uint32_t uAttachmentCount = uAttachmentOffset;
-
+    // find attachment count & fill out descriptions
     VkAttachmentReference tDepthAttachmentReference = {0};
-    if(ptDesc->tDepthTargetFormat != PL_FORMAT_UNKNOWN)
+    for(uint32_t i = 0; i < PL_MAX_RENDER_TARGETS; i++)
     {
-        // from layout
-        atAttachments[0].format = pl__vulkan_format(ptDesc->tDepthTargetFormat);
-        atAttachments[0].samples = 1;
-        atAttachments[0].initialLayout  = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        atAttachments[0].finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        
-        tDepthAttachmentReference.attachment = 0;
-        tDepthAttachmentReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    }
-
-    // find attachment count & fill out references & descriptions
-    for(uint32_t i = 0; i < PL_MAX_COLOR_TARGETS; i++)
-    {
-        if(ptDesc->atColorTargets[i].tFormat == PL_FORMAT_UNKNOWN)
+        if(ptDesc->atRenderTargets[i].tFormat == PL_FORMAT_UNKNOWN)
             break;
         
-        // from layout
-        atAttachments[i + uAttachmentOffset].format = pl__vulkan_format(ptDesc->atColorTargets[i].tFormat);
-        atAttachments[i + uAttachmentOffset].samples = 1;
+        atAttachments[i].format = pl__vulkan_format(ptDesc->atRenderTargets[i].tFormat);
+        atAttachments[i].samples = 1;
 
-        // references
-        atAttachments[i + uAttachmentOffset].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        atAttachments[i + uAttachmentOffset].finalLayout   = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-        uAttachmentCount++;
+        if(pl__is_depth_format(ptDesc->atRenderTargets[i].tFormat))
+        {
+            atAttachments[i].initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            atAttachments[i].finalLayout   = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            tDepthAttachmentReference.attachment = i;
+            tDepthAttachmentReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            uDependencyCount++;
+        }
+        else
+        {
+            atAttachments[i].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            atAttachments[i].finalLayout   = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            
+        }
+        tLayout._uAttachmentCount++;
     }
 
     // fill out subpasses
-    uint32_t uSubpassDependencyCount = 2;
-    VkSubpassDependency atSubpassDependencies[PL_MAX_COLOR_TARGETS * PL_MAX_COLOR_TARGETS + 2] = {0};
-    VkSubpassDescription  atSubpasses[PL_MAX_SUBPASSES] = {0};
-    VkAttachmentReference atSubpassColorAttachmentReferences[PL_MAX_COLOR_TARGETS][PL_MAX_SUBPASSES] = {0};
+    VkSubpassDependency atSubpassDependencies[PL_MAX_RENDER_TARGETS * PL_MAX_RENDER_TARGETS + 2] = {0};
+    if(uDependencyCount > 2)
+    {
+        // this makes sure that writes to the depth image are done before we try to write to it again
+        atSubpassDependencies[2] = (VkSubpassDependency){
+            .srcSubpass      = VK_SUBPASS_EXTERNAL,
+            .dstSubpass      = 0,
+            .srcStageMask    = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+            .dstStageMask    = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+            .srcAccessMask   = 0,
+            .dstAccessMask   = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            .dependencyFlags = 0
+        };
+    }
+
+    VkSubpassDescription atSubpasses[PL_MAX_SUBPASSES] = {0};
+    VkAttachmentReference atSubpassColorAttachmentReferences[PL_MAX_RENDER_TARGETS][PL_MAX_SUBPASSES] = {0};
+    VkAttachmentReference atSubpassInputAttachmentReferences[PL_MAX_RENDER_TARGETS][PL_MAX_SUBPASSES] = {0};
+    uint32_t auLastTargetSubpass[PL_MAX_SUBPASSES] = {0};
+    uint32_t auDependentSubpass[PL_MAX_SUBPASSES] = {0};
+    memset(auDependentSubpass, 0xff, sizeof(uint32_t) * PL_MAX_SUBPASSES);
     for(uint32_t i = 0; i < ptDesc->uSubpassCount; i++)
     {
         const plSubpass* ptSubpass = &ptDesc->atSubpasses[i];
         atSubpasses[i].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
         atSubpasses[i].colorAttachmentCount = ptSubpass->uRenderTargetCount;
         
-        if(ptSubpass->bDepthTarget)
-            atSubpasses[i].pDepthStencilAttachment = &tDepthAttachmentReference;
-
+        uint32_t uCurrentColorAttachment = 0;
         for(uint32_t j = 0; j < ptSubpass->uRenderTargetCount; j++)
         {
-            atSubpassColorAttachmentReferences[j][i].attachment = ptSubpass->auRenderTargets[j] + uAttachmentOffset;
-            atSubpassColorAttachmentReferences[j][i].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            if(pl__is_depth_format(ptDesc->atRenderTargets[ptSubpass->auRenderTargets[j]].tFormat))
+            {
+                atSubpasses[i].pDepthStencilAttachment = &tDepthAttachmentReference;
+                atSubpasses[i].colorAttachmentCount--;
+                tLayout.tDesc.atSubpasses[i]._bHasDepth = true;
+            }
+            else
+            {
+                atSubpassColorAttachmentReferences[i][uCurrentColorAttachment].attachment = ptSubpass->auRenderTargets[j];
+                atSubpassColorAttachmentReferences[i][uCurrentColorAttachment].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                uCurrentColorAttachment++;
+            }
+
+            // last subpass to use this target
+            auLastTargetSubpass[ptSubpass->auRenderTargets[j]] = i;
         }
         atSubpasses[i].pColorAttachments = atSubpassColorAttachmentReferences[i];
+        atSubpasses[i].inputAttachmentCount = ptSubpass->uSubpassInputCount;
+        atSubpasses[i].pInputAttachments = atSubpassInputAttachmentReferences[i];
+
+        for(uint32_t j = 0; j < ptSubpass->uSubpassInputCount; j++)
+        {
+            const uint32_t uInput = ptSubpass->auSubpassInputs[j];
+            const uint32_t uLastPass = auLastTargetSubpass[ptSubpass->auRenderTargets[uInput]];
+            for(uint32_t k = 0; k < PL_MAX_SUBPASSES; k++)
+            {
+                if(auDependentSubpass[k] == UINT32_MAX)
+                {
+                    auDependentSubpass[k] = uLastPass;
+                    break;
+                }
+                else if(auDependentSubpass[k] == uLastPass)
+                    break;
+            }
+            atSubpassInputAttachmentReferences[i][j].attachment = uInput;
+            atSubpassInputAttachmentReferences[i][j].layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        }
+
+        for(uint32_t j = 0; j < PL_MAX_SUBPASSES; j++)
+        {
+            if(auDependentSubpass[j] == UINT32_MAX)
+                break;
+            atSubpassDependencies[uDependencyCount] = (VkSubpassDependency){
+                .srcSubpass      = auDependentSubpass[j],
+                .dstSubpass      = i,
+                .srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .dstStageMask    = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                .srcAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                .dstAccessMask   = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
+                .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
+            };
+            uDependencyCount++;
+        }
+        memset(auDependentSubpass, 0xff, sizeof(uint32_t) * PL_MAX_SUBPASSES);
     }
+
+    plVulkanRenderPassLayout tVulkanRenderPassLayout = {0};
 
     atSubpassDependencies[0] = (VkSubpassDependency){
         .srcSubpass      = VK_SUBPASS_EXTERNAL,
         .dstSubpass      = 0,
-        .srcStageMask    = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        .srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
         .dstStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .srcAccessMask   = VK_ACCESS_SHADER_READ_BIT,
+        .srcAccessMask   = 0,
         .dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
         .dependencyFlags = 0
     };
@@ -2651,28 +2722,23 @@ pl_create_render_pass_layout(plDevice* ptDevice, const plRenderPassLayoutDescrip
         .srcSubpass      = ptDesc->uSubpassCount - 1,
         .dstSubpass      = VK_SUBPASS_EXTERNAL,
         .srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .dstStageMask    = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        .srcAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        .dstAccessMask   = VK_ACCESS_SHADER_READ_BIT,
-        .dependencyFlags = 0
+        .dstStageMask    = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+        .srcAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .dstAccessMask   = VK_ACCESS_MEMORY_READ_BIT,
+        .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
     };
+
 
     const VkRenderPassCreateInfo tRenderPassInfo = {
         .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = uAttachmentCount,
+        .attachmentCount = tLayout._uAttachmentCount,
         .pAttachments    = atAttachments,
         .subpassCount    = ptDesc->uSubpassCount,
         .pSubpasses      = atSubpasses,
-        .dependencyCount = uSubpassDependencyCount,
+        .dependencyCount = uDependencyCount,
         .pDependencies   = atSubpassDependencies
     };
 
-    plRenderPassLayout tLayout = {
-        .tDesc = *ptDesc
-    };
-    tLayout._uAttachmentCount = uAttachmentCount;
-
-    plVulkanRenderPassLayout tVulkanRenderPassLayout = {0};
     PL_VULKAN(vkCreateRenderPass(ptVulkanDevice->tLogicalDevice, &tRenderPassInfo, NULL, &tVulkanRenderPassLayout.tRenderPass));
 
     ptVulkanGfx->sbtRenderPassLayoutsHot[uResourceIndex] = tVulkanRenderPassLayout;
@@ -2711,82 +2777,143 @@ pl_create_render_pass(plDevice* ptDevice, const plRenderPassDescription* ptDesc,
 
     plVulkanRenderPass* ptVulkanRenderPass = &ptVulkanGfx->sbtRenderPassesHot[uResourceIndex];
 
-    VkAttachmentDescription atAttachments[PL_MAX_COLOR_TARGETS] = {0};
-    
-    // find attachment count & fill out references & descriptions
-    const uint32_t uAttachmentOffset = ptLayout->tDesc.tDepthTargetFormat == PL_FORMAT_UNKNOWN ? 0 : 1;
-    uint32_t uAttachmentCount = uAttachmentOffset;
+    VkAttachmentDescription atAttachments[PL_MAX_RENDER_TARGETS] = {0};
+    uint32_t uDependencyCount = 2;
 
+    // find attachment count & fill out descriptions
+    uint32_t uColorAttachmentCount = 0;
     VkAttachmentReference tDepthAttachmentReference = {0};
-    if(ptLayout->tDesc.tDepthTargetFormat != PL_FORMAT_UNKNOWN)
+    for(uint32_t i = 0; i < PL_MAX_RENDER_TARGETS; i++)
     {
-        atAttachments[0].loadOp         = pl__vulkan_load_op(ptDesc->tDepthTarget.tLoadOp);
-        atAttachments[0].storeOp        = pl__vulkan_store_op(ptDesc->tDepthTarget.tStoreOp);
-        atAttachments[0].stencilLoadOp  = pl__vulkan_load_op(ptDesc->tDepthTarget.tStencilLoadOp);
-        atAttachments[0].stencilStoreOp = pl__vulkan_store_op(ptDesc->tDepthTarget.tStencilStoreOp);
-        atAttachments[0].initialLayout  = pl__vulkan_layout(ptDesc->tDepthTarget.tNextUsage);
-        atAttachments[0].finalLayout    = pl__vulkan_layout(ptDesc->tDepthTarget.tNextUsage);
-        
-        // from layout
-        atAttachments[0].format = pl__vulkan_format(ptLayout->tDesc.tDepthTargetFormat);
-        atAttachments[0].samples = 1;
-
-        tDepthAttachmentReference.attachment = 0;
-        tDepthAttachmentReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    }
-
-    // find attachment count & fill out references & descriptions
-    VkAttachmentReference  atColorAttachmentReferences[PL_MAX_COLOR_TARGETS] = {0};
-    for(uint32_t i = 0; i < PL_MAX_COLOR_TARGETS; i++)
-    {
-        if(ptLayout->tDesc.atColorTargets[i].tFormat == PL_FORMAT_UNKNOWN)
+        if(ptLayout->tDesc.atRenderTargets[i].tFormat == PL_FORMAT_UNKNOWN)
             break;
         
-        // from layout
-        atAttachments[i + uAttachmentOffset].format = pl__vulkan_format(ptLayout->tDesc.atColorTargets[i].tFormat);
-        atAttachments[i + uAttachmentOffset].samples = 1;
+        atAttachments[i].format = pl__vulkan_format(ptLayout->tDesc.atRenderTargets[i].tFormat);
+        atAttachments[i].samples = 1;
 
-        // from description
-        atAttachments[i + uAttachmentOffset].loadOp         = pl__vulkan_load_op(ptDesc->atColorTargets[i].tLoadOp);
-        atAttachments[i + uAttachmentOffset].storeOp        = pl__vulkan_store_op(ptDesc->atColorTargets[i].tStoreOp);
-        atAttachments[i + uAttachmentOffset].stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        atAttachments[i + uAttachmentOffset].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        if(pl__is_depth_format(ptLayout->tDesc.atRenderTargets[i].tFormat))
+        {
+            atAttachments[i].loadOp         = pl__vulkan_load_op(ptDesc->tDepthTarget.tLoadOp);
+            atAttachments[i].storeOp        = pl__vulkan_store_op(ptDesc->tDepthTarget.tStoreOp);
+            atAttachments[i].stencilLoadOp  = pl__vulkan_load_op(ptDesc->tDepthTarget.tStencilLoadOp);
+            atAttachments[i].stencilStoreOp = pl__vulkan_store_op(ptDesc->tDepthTarget.tStencilStoreOp);
+            atAttachments[i].initialLayout  = pl__vulkan_layout(ptDesc->tDepthTarget.tCurrentUsage);
+            atAttachments[i].finalLayout    = pl__vulkan_layout(ptDesc->tDepthTarget.tNextUsage);
 
-        // layouts
-        atAttachments[i + uAttachmentOffset].initialLayout = pl__vulkan_layout(ptDesc->atColorTargets[i].tNextUsage);
-        atAttachments[i + uAttachmentOffset].finalLayout   = pl__vulkan_layout(ptDesc->atColorTargets[i].tNextUsage);
+            tDepthAttachmentReference.attachment = i;
+            tDepthAttachmentReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            uDependencyCount++;
+        }
+        else
+        {
 
-        uAttachmentCount++;
+            // from description
+            atAttachments[i].loadOp         = pl__vulkan_load_op(ptDesc->atColorTargets[uColorAttachmentCount].tLoadOp);
+            atAttachments[i].storeOp        = pl__vulkan_store_op(ptDesc->atColorTargets[uColorAttachmentCount].tStoreOp);
+            atAttachments[i].stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            atAttachments[i].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            atAttachments[i].initialLayout  = pl__vulkan_layout(ptDesc->atColorTargets[uColorAttachmentCount].tCurrentUsage);
+            atAttachments[i].finalLayout    = pl__vulkan_layout(ptDesc->atColorTargets[uColorAttachmentCount].tNextUsage);
+            uColorAttachmentCount++;
+
+        }
+    }
+    
+    // fill out subpasses
+
+    VkSubpassDependency atSubpassDependencies[PL_MAX_RENDER_TARGETS * PL_MAX_RENDER_TARGETS + 2] = {0};
+    if(uDependencyCount > 2)
+    {
+        // this makes sure that writes to the depth image are done before we try to write to it again
+        atSubpassDependencies[2] = (VkSubpassDependency){
+            .srcSubpass      = VK_SUBPASS_EXTERNAL,
+            .dstSubpass      = 0,
+            .srcStageMask    = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+            .dstStageMask    = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+            .srcAccessMask   = 0,
+            .dstAccessMask   = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            .dependencyFlags = 0
+        };
     }
 
-    // fill out subpasses
-    uint32_t uSubpassDependencyCount = 2;
-    VkSubpassDependency atSubpassDependencies[PL_MAX_COLOR_TARGETS * PL_MAX_COLOR_TARGETS + 2] = {0};
     VkSubpassDescription  atSubpasses[PL_MAX_SUBPASSES] = {0};
-    VkAttachmentReference atSubpassColorAttachmentReferences[PL_MAX_COLOR_TARGETS][PL_MAX_SUBPASSES] = {0};
+    VkAttachmentReference atSubpassColorAttachmentReferences[PL_MAX_RENDER_TARGETS][PL_MAX_SUBPASSES] = {0};
+    VkAttachmentReference atSubpassInputAttachmentReferences[PL_MAX_RENDER_TARGETS][PL_MAX_SUBPASSES] = {0};
+    uint32_t auLastTargetSubpass[PL_MAX_SUBPASSES] = {0};
+    uint32_t auDependentSubpass[PL_MAX_SUBPASSES] = {0};
+    memset(auDependentSubpass, 0xff, sizeof(uint32_t) * PL_MAX_SUBPASSES);
     for(uint32_t i = 0; i < ptLayout->tDesc.uSubpassCount; i++)
     {
         const plSubpass* ptSubpass = &ptLayout->tDesc.atSubpasses[i];
         atSubpasses[i].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
         atSubpasses[i].colorAttachmentCount = ptSubpass->uRenderTargetCount;
         
-        if(ptSubpass->bDepthTarget)
-            atSubpasses[i].pDepthStencilAttachment = &tDepthAttachmentReference;
-
+        uint32_t uCurrentColorAttachment = 0;
         for(uint32_t j = 0; j < ptSubpass->uRenderTargetCount; j++)
         {
-            atSubpassColorAttachmentReferences[j][i].attachment = ptSubpass->auRenderTargets[j] + uAttachmentOffset;
-            atSubpassColorAttachmentReferences[j][i].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            if(pl__is_depth_format(ptLayout->tDesc.atRenderTargets[ptSubpass->auRenderTargets[j]].tFormat))
+            {
+                atSubpasses[i].pDepthStencilAttachment = &tDepthAttachmentReference;
+                atSubpasses[i].colorAttachmentCount--;
+                ptLayout->tDesc.atSubpasses[i]._bHasDepth = true;
+            }
+            else
+            {
+                atSubpassColorAttachmentReferences[i][uCurrentColorAttachment].attachment = ptSubpass->auRenderTargets[j];
+                atSubpassColorAttachmentReferences[i][uCurrentColorAttachment].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                uCurrentColorAttachment++;
+            }
+
+            // last subpass to use this target
+            auLastTargetSubpass[ptSubpass->auRenderTargets[j]] = i;
         }
         atSubpasses[i].pColorAttachments = atSubpassColorAttachmentReferences[i];
+        atSubpasses[i].pInputAttachments = atSubpassInputAttachmentReferences[i];
+        atSubpasses[i].inputAttachmentCount = ptSubpass->uSubpassInputCount;
+
+        for(uint32_t j = 0; j < ptSubpass->uSubpassInputCount; j++)
+        {
+            const uint32_t uInput = ptSubpass->auSubpassInputs[j];
+            const uint32_t uLastPass = auLastTargetSubpass[ptSubpass->auRenderTargets[uInput]];
+            for(uint32_t k = 0; k < PL_MAX_SUBPASSES; k++)
+            {
+                if(auDependentSubpass[k] == UINT32_MAX)
+                {
+                    auDependentSubpass[k] = uLastPass;
+                    break;
+                }
+                else if(auDependentSubpass[k] == uLastPass)
+                    break;
+            }
+
+            atSubpassInputAttachmentReferences[i][j].attachment = uInput;
+            atSubpassInputAttachmentReferences[i][j].layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        }
+
+        for(uint32_t j = 0; j < PL_MAX_SUBPASSES; j++)
+        {
+            if(auDependentSubpass[j] == UINT32_MAX)
+                break;
+            atSubpassDependencies[uDependencyCount] = (VkSubpassDependency){
+                .srcSubpass      = auDependentSubpass[j],
+                .dstSubpass      = i,
+                .srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .dstStageMask    = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                .srcAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                .dstAccessMask   = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
+                .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
+            };
+            uDependencyCount++;
+        }
+        memset(auDependentSubpass, 0xff, sizeof(uint32_t) * PL_MAX_SUBPASSES);
     }
 
     atSubpassDependencies[0] = (VkSubpassDependency){
         .srcSubpass      = VK_SUBPASS_EXTERNAL,
         .dstSubpass      = 0,
-        .srcStageMask    = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        .srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
         .dstStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .srcAccessMask   = VK_ACCESS_SHADER_READ_BIT,
+        .srcAccessMask   = 0,
         .dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
         .dependencyFlags = 0
     };
@@ -2795,27 +2922,29 @@ pl_create_render_pass(plDevice* ptDevice, const plRenderPassDescription* ptDesc,
         .srcSubpass      = ptLayout->tDesc.uSubpassCount - 1,
         .dstSubpass      = VK_SUBPASS_EXTERNAL,
         .srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .dstStageMask    = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        .srcAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        .dstAccessMask   = VK_ACCESS_SHADER_READ_BIT,
-        .dependencyFlags = 0
+        .dstStageMask    = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+        .srcAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .dstAccessMask   = VK_ACCESS_MEMORY_READ_BIT,
+        .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
     };
+
 
     const VkRenderPassCreateInfo tRenderPassInfo = {
         .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = uAttachmentCount,
+        .attachmentCount = ptLayout->_uAttachmentCount,
         .pAttachments    = atAttachments,
         .subpassCount    = ptLayout->tDesc.uSubpassCount,
         .pSubpasses      = atSubpasses,
-        .dependencyCount = uSubpassDependencyCount,
+        .dependencyCount = uDependencyCount,
         .pDependencies   = atSubpassDependencies
     };
 
     PL_VULKAN(vkCreateRenderPass(ptVulkanDevice->tLogicalDevice, &tRenderPassInfo, NULL, &ptVulkanRenderPass->tRenderPass));
 
-    VkImageView atViewAttachments[PL_MAX_COLOR_TARGETS] = {0};
 
-    for(uint32_t j = 0; j < uAttachmentCount; j++)
+    VkImageView atViewAttachments[PL_MAX_RENDER_TARGETS] = {0};
+
+    for(uint32_t j = 0; j < ptLayout->_uAttachmentCount; j++)
     {
         atViewAttachments[j] = ptVulkanGfx->sbtSamplersHot[ptAttachments[0].atViewAttachments[j].uIndex].tImageView;
     }
@@ -2823,7 +2952,7 @@ pl_create_render_pass(plDevice* ptDevice, const plRenderPassDescription* ptDesc,
     VkFramebufferCreateInfo tFrameBufferInfo = {
         .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .renderPass      = ptVulkanRenderPass->tRenderPass,
-        .attachmentCount = uAttachmentCount,
+        .attachmentCount = ptLayout->_uAttachmentCount,
         .pAttachments    = atViewAttachments,
         .width           = (uint32_t)ptDesc->tDimensions.x,
         .height          = (uint32_t)ptDesc->tDimensions.y,
@@ -2851,7 +2980,7 @@ pl_update_render_pass_attachments(plDevice* ptDevice, plRenderPassHandle tHandle
 
     const plRenderPassDescription* ptDesc = &ptRenderPass->tDesc;
 
-    VkImageView atViewAttachments[PL_MAX_COLOR_TARGETS] = {0};
+    VkImageView atViewAttachments[PL_MAX_RENDER_TARGETS] = {0};
 
     for(uint32_t j = 0; j < ptLayout->_uAttachmentCount; j++)
     {
@@ -2948,25 +3077,29 @@ pl_begin_render_pass(plGraphics* ptGraphics, plCommandBuffer* ptCmdBuffer, plRen
     }
     else
     {
-        VkClearValue atClearValues[PL_MAX_COLOR_TARGETS + 1] = {0};
+        VkClearValue atClearValues[PL_MAX_RENDER_TARGETS] = {0};
 
-        uint32_t uCurrentAttachment = 0;
+        uint32_t uAttachmentCount = 0;
 
-        if(ptLayout->tDesc.tDepthTargetFormat != PL_FORMAT_UNKNOWN)
+        for(uint32_t i = 0; i < PL_MAX_RENDER_TARGETS; i++)
         {
-            atClearValues[0].depthStencil.depth = ptRenderPass->tDesc.tDepthTarget.fClearZ;
-            atClearValues[0].depthStencil.stencil = ptRenderPass->tDesc.tDepthTarget.uClearStencil;
-            uCurrentAttachment++;
-        }
 
-        for(uint32_t i = 0; i < ptLayout->_uAttachmentCount; i++)
-        {
-            // ptLayout->tDesc.atColorTargets[i].tClearColor.
-            atClearValues[uCurrentAttachment].color.float32[0] = ptRenderPass->tDesc.atColorTargets[i].tClearColor.r;
-            atClearValues[uCurrentAttachment].color.float32[1] = ptRenderPass->tDesc.atColorTargets[i].tClearColor.g;
-            atClearValues[uCurrentAttachment].color.float32[2] = ptRenderPass->tDesc.atColorTargets[i].tClearColor.b;
-            atClearValues[uCurrentAttachment].color.float32[3] = ptRenderPass->tDesc.atColorTargets[i].tClearColor.a;
-            uCurrentAttachment++;
+            if(ptLayout->tDesc.atRenderTargets[i].tFormat == PL_FORMAT_UNKNOWN)
+                break;
+
+            if(pl__is_depth_format(ptLayout->tDesc.atRenderTargets[i].tFormat))
+            {
+                atClearValues[i].depthStencil.depth = ptRenderPass->tDesc.tDepthTarget.fClearZ;
+                atClearValues[i].depthStencil.stencil = ptRenderPass->tDesc.tDepthTarget.uClearStencil;
+            }
+            else
+            {
+                atClearValues[i].color.float32[0] = ptRenderPass->tDesc.atColorTargets[i].tClearColor.r;
+                atClearValues[i].color.float32[1] = ptRenderPass->tDesc.atColorTargets[i].tClearColor.g;
+                atClearValues[i].color.float32[2] = ptRenderPass->tDesc.atColorTargets[i].tClearColor.b;
+                atClearValues[i].color.float32[3] = ptRenderPass->tDesc.atColorTargets[i].tClearColor.a;
+            }
+            uAttachmentCount++;
         }
 
         VkRenderPassBeginInfo tRenderPassInfo = {
@@ -2977,7 +3110,7 @@ pl_begin_render_pass(plGraphics* ptGraphics, plCommandBuffer* ptCmdBuffer, plRen
                 .width  = (uint32_t)ptRenderPass->tDesc.tDimensions.x,
                 .height = (uint32_t)ptRenderPass->tDesc.tDimensions.y
             },
-            .clearValueCount   = ptLayout->_uAttachmentCount,
+            .clearValueCount   = uAttachmentCount,
             .pClearValues      = atClearValues
         };
 
@@ -5318,15 +5451,28 @@ pl__vulkan_format(plFormat tFormat)
     return VK_FORMAT_UNDEFINED;
 }
 
-static VkImageLayout
-pl__vulkan_layout(plTextureLayout tLayout)
+static bool
+pl__is_depth_format(plFormat tFormat)
 {
-    switch(tLayout)
+    switch(tFormat)
     {
-        case PL_TEXTURE_LAYOUT_RENDER_TARGET: return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        case PL_TEXTURE_LAYOUT_DEPTH_STENCIL: return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        case PL_TEXTURE_LAYOUT_PRESENT:       return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-        case PL_TEXTURE_LAYOUT_SHADER_READ:   return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        case PL_FORMAT_D32_FLOAT:
+        case PL_FORMAT_D32_FLOAT_S8_UINT:
+        case PL_FORMAT_D24_UNORM_S8_UINT:
+        case PL_FORMAT_D16_UNORM_S8_UINT: return true;
+    }
+    return false;
+}
+
+static VkImageLayout
+pl__vulkan_layout(plTextureUsage tUsage)
+{
+    switch(tUsage)
+    {
+        case PL_TEXTURE_USAGE_COLOR_ATTACHMENT:         return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        case PL_TEXTURE_USAGE_DEPTH_STENCIL_ATTACHMENT: return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        case PL_TEXTURE_USAGE_PRESENT:                  return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        case PL_TEXTURE_USAGE_SAMPLED:                  return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
 
     PL_ASSERT(false && "Unsupported texture layout");
