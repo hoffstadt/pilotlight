@@ -355,6 +355,7 @@ typedef struct _plRenderEncoder
     plGraphics*        ptGraphics;
     plCommandBuffer    tCommandBuffer;
     plRenderPassHandle tRenderPassHandle;
+    uint32_t           _uCurrentSubpass;
     void*              _pInternal;
 } plRenderEncoder;
 

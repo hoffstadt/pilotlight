@@ -305,6 +305,7 @@ int main()
         [self initCommon];
     }
     [self addSubview:gKeyEventResponder];
+
     pl__add_osx_tracking_area(self);
     return self;
 }

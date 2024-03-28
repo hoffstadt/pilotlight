@@ -789,7 +789,7 @@ pl_refr_create_view(uint32_t uSceneHandle, plVec2 tDimensions)
         .tLayout = ptScene->tRenderPassLayout,
         .tDepthTarget = {
                 .tLoadOp         = PL_LOAD_OP_CLEAR,
-                .tStoreOp        = PL_STORE_OP_DONT_CARE,
+                .tStoreOp        = PL_STORE_OP_STORE,
                 .tStencilLoadOp  = PL_LOAD_OP_CLEAR,
                 .tStencilStoreOp = PL_STORE_OP_DONT_CARE,
                 .tCurrentUsage   = PL_TEXTURE_USAGE_DEPTH_STENCIL_ATTACHMENT,
@@ -1005,8 +1005,6 @@ pl_refr_resize(void)
     plIO* ptIO = pl_get_io();
 
     gptGfx->resize(ptGraphics);
-
-
 }
 
 static void

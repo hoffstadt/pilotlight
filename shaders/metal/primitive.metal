@@ -318,7 +318,14 @@ float3 linearTosRGB(float3 color)
     return pow(color, float3(INV_GAMMA));
 }
 
-fragment float4 fragment_main(
+struct plMultipleRenderTargets
+{   
+    float4 outAlbedo [[ color(0) ]];
+    float4 outNormal [[ color(1) ]];
+    float4 outPosition [[ color(2) ]];
+};
+
+fragment plMultipleRenderTargets fragment_main(
     VertexOut in [[stage_in]],
     device const BindGroup_0& bg0 [[ buffer(1) ]],
     device const BindGroup_1& bg1 [[ buffer(2) ]],
@@ -329,11 +336,10 @@ fragment float4 fragment_main(
 {
 
     float4 tBaseColor = getBaseColor(bg1, bg0.atMaterials[tObjectInfo.iMaterialIndex].tColor, in);
-    float3 tSunlightColor = float3(1.0, 1.0, 1.0);
     NormalInfo tNormalInfo = pl_get_normal_info(bg1, in, front_facing);
-    float3 tSunLightDirection = float3(-1.0, -1.0, -1.0);
-    float fDiffuseIntensity = max(0.0, dot(tNormalInfo.n, -normalize(tSunLightDirection)));
-    float4 outColor = tBaseColor * float4(tSunlightColor * (0.05 + fDiffuseIntensity), 1.0);
-    outColor = float4(linearTosRGB(outColor.rgb), tBaseColor.a);
-    return outColor;
+    plMultipleRenderTargets tMRT;
+    tMRT.outAlbedo = tBaseColor;
+    tMRT.outNormal = float4(tNormalInfo.n, 1.0);
+    tMRT.outPosition = float4(in.tPosition, 1.0);
+    return tMRT;
 }
